@@ -52,17 +52,15 @@ function buildFlowFeatures(
   if (rows.length === 0) return { features, arrowFeatures }
 
   const trips = rows.map((r) => r.trips)
-  const minT = Math.min(...trips)
   const maxT = Math.max(...trips)
-  const sqrtMin = Math.sqrt(minT)
-  const sqrtRange = Math.sqrt(maxT) - sqrtMin || 1
+  const powMax = Math.pow(maxT, 1.5) || 1
 
   for (const row of rows) {
     const orig = centroidMap.get(row.origin_id)
     const dest = centroidMap.get(row.dest_id)
     if (!orig || !dest) continue
 
-    const width = 2 + ((Math.sqrt(row.trips) - sqrtMin) / sqrtRange) * 12
+    const width = 2 + (Math.pow(row.trips, 1.5) / powMax) * 12
     const bearing = haversineBearing(orig.lat, orig.lon, dest.lat, dest.lon)
     // Offset each line by half its own width plus the gap, so opposing edges
     // are always separated by exactly 2 × GAP_PX regardless of line thickness
@@ -403,7 +401,7 @@ export default function MapView() {
 
     const { features: fo, arrowFeatures: ao } = buildFlowFeatures(od.outgoing, centroidMap.current, hasOffset)
     const { features: fi, arrowFeatures: ai } = buildFlowFeatures(od.incoming, centroidMap.current, hasOffset)
-    const { features: fint, arrowFeatures: aint } = buildFlowFeatures(od.internal, centroidMap.current, false)
+    const { features: fint, arrowFeatures: aint } = buildFlowFeatures(od.internal, centroidMap.current, true)
 
     setSource(map, 'flows-outgoing',  toGeoJSON(fo))
     setSource(map, 'arrows-outgoing', toGeoJSON(ao))

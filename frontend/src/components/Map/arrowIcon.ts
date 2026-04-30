@@ -3,7 +3,7 @@ import type maplibregl from 'maplibre-gl'
 const ARROW_COLORS: Record<string, string> = {
   outgoing: '#DC2626',
   incoming: '#059669',
-  internal: 'rgba(255,255,255,0.9)',
+  internal: '#C2410C',
 }
 
 function createArrow(map: maplibregl.Map, name: string, color: string) {

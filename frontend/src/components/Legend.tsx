@@ -39,12 +39,12 @@ export default function Legend() {
 
       {/* Thickness scale */}
       <div className="space-y-0.5">
-        <div className="text-gray-500 text-xs">Line width = √trips</div>
+        <div className="text-gray-500 text-xs">Line width ∝ trips¹·⁵</div>
         <div className="flex items-end gap-1">
           <div className="w-8 bg-gray-400 rounded" style={{ height: '2px' }} />
-          <span className="text-gray-500">{Math.round(minT).toLocaleString()}</span>
+          <span className="text-gray-500">{Math.round(minT).toLocaleString()} min</span>
           <div className="w-8 bg-gray-400 rounded" style={{ height: '14px' }} />
-          <span className="text-gray-500">{Math.round(maxT).toLocaleString()}</span>
+          <span className="text-gray-500">{Math.round(maxT).toLocaleString()} max</span>
         </div>
       </div>
 
