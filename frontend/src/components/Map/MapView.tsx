@@ -39,12 +39,13 @@ function haversineBearing(lat1: number, lon1: number, lat2: number, lon2: number
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360
 }
 
-const LINE_OFFSET_PX = 5
+const GAP_PX = 1.5   // half-gap between opposing line edges; total visual gap = 2 × GAP_PX
 const ARROW_SIZE = 0.8  // must match icon-size in the layer definition
 
 function buildFlowFeatures(
   rows: ODRow[],
   centroidMap: Map<string, { lat: number; lon: number; label: string }>,
+  applyOffset: boolean,
 ) {
   const features: GeoJSON.Feature[] = []
   const arrowFeatures: GeoJSON.Feature[] = []
@@ -61,8 +62,12 @@ function buildFlowFeatures(
     const dest = centroidMap.get(row.dest_id)
     if (!orig || !dest) continue
 
-    const width = 1 + ((Math.sqrt(row.trips) - sqrtMin) / sqrtRange) * 11
+    const width = 2 + ((Math.sqrt(row.trips) - sqrtMin) / sqrtRange) * 12
     const bearing = haversineBearing(orig.lat, orig.lon, dest.lat, dest.lon)
+    // Offset each line by half its own width plus the gap, so opposing edges
+    // are always separated by exactly 2 × GAP_PX regardless of line thickness
+    const offset = applyOffset ? width / 2 + GAP_PX : 0
+    const iconOffset: [number, number] = applyOffset ? [offset / ARROW_SIZE, 0] : [0, 0]
 
     features.push({
       type: 'Feature',
@@ -75,6 +80,7 @@ function buildFlowFeatures(
         dest_id: row.dest_id,
         trips: row.trips,
         width,
+        offset,
         bearing,
         orig_label: orig.label,
         dest_label: dest.label,
@@ -90,7 +96,7 @@ function buildFlowFeatures(
           orig.lat + 0.75 * (dest.lat - orig.lat),
         ],
       },
-      properties: { bearing },
+      properties: { bearing, iconOffset },
     })
   }
 
@@ -198,7 +204,12 @@ export default function MapView() {
           type: 'line',
           source: `flows-${tag}`,
           minzoom: 5,
-          paint: { 'line-color': color, 'line-width': ['get', 'width'], 'line-opacity': 0.75 },
+          paint: {
+            'line-color': color,
+            'line-width': ['get', 'width'],
+            'line-offset': ['get', 'offset'],
+            'line-opacity': 0.75,
+          },
         })
         map.addSource(`arrows-${tag}`, { type: 'geojson', data: toGeoJSON([]) })
         map.addLayer({
@@ -211,7 +222,8 @@ export default function MapView() {
             'icon-rotate': ['get', 'bearing'],
             'icon-rotation-alignment': 'map',
             'icon-allow-overlap': true,
-            'icon-size': 0.8,
+            'icon-size': ARROW_SIZE,
+            'icon-offset': ['get', 'iconOffset'],
           },
           paint: { 'icon-opacity': 0.85 },
         })
@@ -389,9 +401,9 @@ export default function MapView() {
 
     const hasOffset = od.outgoing.length > 0 && od.incoming.length > 0
 
-    const { features: fo, arrowFeatures: ao } = buildFlowFeatures(od.outgoing, centroidMap.current)
-    const { features: fi, arrowFeatures: ai } = buildFlowFeatures(od.incoming, centroidMap.current)
-    const { features: fint, arrowFeatures: aint } = buildFlowFeatures(od.internal, centroidMap.current)
+    const { features: fo, arrowFeatures: ao } = buildFlowFeatures(od.outgoing, centroidMap.current, hasOffset)
+    const { features: fi, arrowFeatures: ai } = buildFlowFeatures(od.incoming, centroidMap.current, hasOffset)
+    const { features: fint, arrowFeatures: aint } = buildFlowFeatures(od.internal, centroidMap.current, false)
 
     setSource(map, 'flows-outgoing',  toGeoJSON(fo))
     setSource(map, 'arrows-outgoing', toGeoJSON(ao))
@@ -399,14 +411,6 @@ export default function MapView() {
     setSource(map, 'arrows-incoming', toGeoJSON(ai))
     setSource(map, 'flows-internal',  toGeoJSON(fint))
     setSource(map, 'arrows-internal', toGeoJSON(aint))
-
-    // line-offset shifts lines in screen pixels; icon-offset shifts arrows in icon-local
-    // screen pixels (rotated with icon-rotate), so both use the same unit automatically
-    const arrowOffset: [number, number] = hasOffset ? [LINE_OFFSET_PX / ARROW_SIZE, 0] : [0, 0]
-    map.setLayoutProperty('flows-outgoing-arrows', 'icon-offset', arrowOffset)
-    map.setLayoutProperty('flows-incoming-arrows', 'icon-offset', arrowOffset)
-    map.setPaintProperty('flows-outgoing-line', 'line-offset', hasOffset ? LINE_OFFSET_PX : 0)
-    map.setPaintProperty('flows-incoming-line', 'line-offset', hasOffset ? LINE_OFFSET_PX : 0)
   }, [mapReady, od])
 
   // ── Update zone labels: only selected zones + OD origins/destinations ────

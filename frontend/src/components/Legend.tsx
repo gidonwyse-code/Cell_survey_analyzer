@@ -43,7 +43,7 @@ export default function Legend() {
         <div className="flex items-end gap-1">
           <div className="w-8 bg-gray-400 rounded" style={{ height: '2px' }} />
           <span className="text-gray-500">{Math.round(minT).toLocaleString()}</span>
-          <div className="w-8 bg-gray-400 rounded" style={{ height: '8px' }} />
+          <div className="w-8 bg-gray-400 rounded" style={{ height: '14px' }} />
           <span className="text-gray-500">{Math.round(maxT).toLocaleString()}</span>
         </div>
       </div>
