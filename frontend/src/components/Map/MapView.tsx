@@ -123,6 +123,7 @@ export default function MapView() {
   const {
     activeLevel, activeMode, directionMode,
     selectedZoneIds, filters, activeBasemap,
+    showFlowLabels,
     toggleZone,
   } = useStore()
 
@@ -224,6 +225,27 @@ export default function MapView() {
             'icon-offset': ['get', 'iconOffset'],
           },
           paint: { 'icon-opacity': 0.85 },
+        })
+        map.addLayer({
+          id: `flows-${tag}-labels`,
+          type: 'symbol',
+          source: `flows-${tag}`,
+          minzoom: 5,
+          layout: {
+            'symbol-placement': 'line-center',
+            'text-field': ['to-string', ['round', ['get', 'trips']]],
+            'text-font': ['Klokantech Noto Sans Regular'],
+            'text-size': 11,
+            'text-offset': [0, 0.8],
+            'text-keep-upright': true,
+            'text-allow-overlap': false,
+            'visibility': 'none',
+          },
+          paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': '#111111',
+            'text-halo-width': 1.5,
+          },
         })
       }
 
@@ -410,6 +432,16 @@ export default function MapView() {
     setSource(map, 'flows-internal',  toGeoJSON(fint))
     setSource(map, 'arrows-internal', toGeoJSON(aint))
   }, [mapReady, od])
+
+  // ── Toggle flow line labels ──────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const visibility = showFlowLabels ? 'visible' : 'none'
+    for (const tag of ['outgoing', 'incoming', 'internal'] as const) {
+      map.setLayoutProperty(`flows-${tag}-labels`, 'visibility', visibility)
+    }
+  }, [mapReady, showFlowLabels])
 
   // ── Update zone labels: only selected zones + OD origins/destinations ────
   useEffect(() => {

@@ -10,6 +10,7 @@ interface AppState {
   hoveredZoneId: string | null
   hoveredFlowId: string | null
   activeBasemap: Basemap
+  showFlowLabels: boolean
 
   setLevel: (l: Level) => void
   setMode: (m: Mode) => void
@@ -21,6 +22,7 @@ interface AppState {
   setHoveredZone: (id: string | null) => void
   setHoveredFlow: (id: string | null) => void
   setBasemap: (b: Basemap) => void
+  setShowFlowLabels: (v: boolean) => void
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -32,6 +34,7 @@ export const useStore = create<AppState>((set) => ({
   hoveredZoneId: null,
   hoveredFlowId: null,
   activeBasemap: 'light',
+  showFlowLabels: false,
 
   setLevel: (l) => set({ activeLevel: l, selectedZoneIds: new Set(), activeMode: 1 }),
   setMode: (m) => set({ activeMode: m }),
@@ -68,4 +71,5 @@ export const useStore = create<AppState>((set) => ({
   setHoveredZone: (id) => set({ hoveredZoneId: id }),
   setHoveredFlow: (id) => set({ hoveredFlowId: id }),
   setBasemap: (b) => set({ activeBasemap: b }),
+  setShowFlowLabels: (v) => set({ showFlowLabels: v }),
 }))
