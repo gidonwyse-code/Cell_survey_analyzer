@@ -19,25 +19,31 @@ export default function ModeSelector() {
   const count = selectedZoneIds.size
   if (count === 0) return null
 
-  const availableModes = MODES.filter((m) => count >= m.minZones)
+  const visibleModes = MODES.filter((m) => count >= m.minZones)
 
   return (
     <div>
       <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Visualization Mode</div>
       <div className="flex flex-col gap-1">
-        {availableModes.map((m) => (
-          <button
-            key={m.value}
-            onClick={() => setMode(m.value)}
-            className={`w-full py-1.5 rounded text-xs font-medium text-left px-3 transition-colors ${
-              activeMode === m.value
-                ? 'bg-sky-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            Mode {m.value} — {m.label}
-          </button>
-        ))}
+        {visibleModes.map((m) => {
+          const disabled = m.value === 1 && count >= 2
+          return (
+            <button
+              key={m.value}
+              onClick={() => !disabled && setMode(m.value)}
+              disabled={disabled}
+              className={`w-full py-1.5 rounded text-xs font-medium text-left px-3 transition-colors ${
+                disabled
+                  ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                  : activeMode === m.value
+                  ? 'bg-sky-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              Mode {m.value} — {m.label}
+            </button>
+          )
+        })}
       </div>
 
       {(activeMode === 1 || activeMode === 3) && (

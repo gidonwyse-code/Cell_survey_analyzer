@@ -3,7 +3,6 @@ import { useStore } from '../../store/useStore'
 import type { Day } from '../../types'
 
 const DAYS: Array<{ value: Day; label: string }> = [
-  { value: null,       label: 'All' },
   { value: 'weekday',  label: 'Weekday' },
   { value: 'friday',   label: 'Friday' },
   { value: 'saturday', label: 'Saturday' },

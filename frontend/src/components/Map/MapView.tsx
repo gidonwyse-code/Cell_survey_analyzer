@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+
+maplibregl.setRTLTextPlugin(
+  'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js',
+  null,
+  true,
+)
 import { useStore } from '../../store/useStore'
 import { useZones } from '../../hooks/useZones'
 import { useOD } from '../../hooks/useOD'
 import type { ODRow } from '../../types'
-import { addArrowImage } from './arrowIcon'
+import { addArrowImages } from './arrowIcon'
 
 // MapLibre does not support {s} or {r} placeholders — use explicit subdomain URLs
 const CARTO_SUBDOMAINS = ['a', 'b', 'c', 'd']
@@ -32,6 +38,9 @@ function haversineBearing(lat1: number, lon1: number, lat2: number, lon2: number
   const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(dLon)
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360
 }
+
+const LINE_OFFSET_PX = 5
+const ARROW_SIZE = 0.8  // must match icon-size in the layer definition
 
 function buildFlowFeatures(
   rows: ODRow[],
@@ -155,7 +164,7 @@ export default function MapView() {
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
 
     map.on('load', () => {
-      addArrowImage(map)
+      addArrowImages(map)
 
       // Zone polygon layers
       map.addSource('zones', { type: 'geojson', data: toGeoJSON([]), promoteId: 'idx' })
@@ -180,30 +189,9 @@ export default function MapView() {
         paint: { 'line-color': 'rgba(0,0,0,0.25)', 'line-width': 0.8 },
       })
 
-      // Zone label points
-      map.addSource('zone-labels', { type: 'geojson', data: toGeoJSON([]) })
-      map.addLayer({
-        id: 'zones-labels',
-        type: 'symbol',
-        source: 'zone-labels',
-        minzoom: 8,
-        layout: {
-          'text-field': ['get', 'label'],
-          'text-font': ['Open Sans Regular'],
-          'text-size': 10,
-          'text-anchor': 'center',
-          'text-max-width': 8,
-        },
-        paint: {
-          'text-color': '#1a1a2e',
-          'text-halo-color': '#ffffff',
-          'text-halo-width': 1.5,
-        },
-      })
-
       // Flow line layers
-      for (const tag of ['single', 'internal', 'external'] as const) {
-        const color = tag === 'single' ? '#38BDF8' : tag === 'internal' ? '#FB923C' : '#A78BFA'
+      for (const tag of ['outgoing', 'incoming', 'internal'] as const) {
+        const color = tag === 'outgoing' ? '#FC8181' : tag === 'incoming' ? '#6EE7B7' : '#FB923C'
         map.addSource(`flows-${tag}`, { type: 'geojson', data: toGeoJSON([]) })
         map.addLayer({
           id: `flows-${tag}-line`,
@@ -219,7 +207,7 @@ export default function MapView() {
           source: `arrows-${tag}`,
           minzoom: 5,
           layout: {
-            'icon-image': 'arrow',
+            'icon-image': `arrow-${tag}`,
             'icon-rotate': ['get', 'bearing'],
             'icon-rotation-alignment': 'map',
             'icon-allow-overlap': true,
@@ -228,6 +216,27 @@ export default function MapView() {
           paint: { 'icon-opacity': 0.85 },
         })
       }
+
+      // Zone label points — added AFTER flow layers so labels render above lines
+      map.addSource('zone-labels', { type: 'geojson', data: toGeoJSON([]) })
+      map.addLayer({
+        id: 'zones-labels',
+        type: 'symbol',
+        source: 'zone-labels',
+        minzoom: 8,
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': ['Klokantech Noto Sans Regular'],
+          'text-size': 10,
+          'text-anchor': 'center',
+          'text-max-width': 8,
+        },
+        paint: {
+          'text-color': '#1a1a2e',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 1.5,
+        },
+      })
 
       // Zone click / hover
       map.on('click', 'zones-fill', (e) => {
@@ -277,12 +286,12 @@ export default function MapView() {
       })
 
       // Flow hover tooltips
-      for (const tag of ['single', 'internal', 'external'] as const) {
+      for (const tag of ['outgoing', 'incoming', 'internal'] as const) {
         map.on('mousemove', `flows-${tag}-line`, (e) => {
           if (!e.features?.length) return
           map.getCanvas().style.cursor = 'crosshair'
           const p = e.features[0].properties
-          const html = `<span style="font-size:12px"><b>${p.orig_label}</b> → <b>${p.dest_label}</b><br/>${Math.round(p.trips).toLocaleString()} trips</span>`
+          const html = `<span dir="rtl" style="font-size:12px;display:block"><b>${p.orig_label}</b> ← <b>${p.dest_label}</b><br/>${Math.round(p.trips).toLocaleString()} נסיעות</span>`
           if (tooltipRef.current) {
             tooltipRef.current.setLngLat(e.lngLat).setHTML(html)
           } else {
@@ -333,17 +342,6 @@ export default function MapView() {
 
     setSource(map, 'zones', { type: 'FeatureCollection', features })
 
-    // Label centroid points
-    const labelFeatures: GeoJSON.Feature[] = features.map((f) => ({
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [f.properties.centroid_lon, f.properties.centroid_lat],
-      },
-      properties: { label: f.properties.label },
-    }))
-    setSource(map, 'zone-labels', { type: 'FeatureCollection', features: labelFeatures })
-
     // Fit bounds on first load
     if (!initialFitRef.current && features.length > 0) {
       initialFitRef.current = true
@@ -389,43 +387,50 @@ export default function MapView() {
     const map = mapRef.current
     if (!map || !mapReady) return
 
-    const empty = toGeoJSON([])
+    const hasOffset = od.outgoing.length > 0 && od.incoming.length > 0
 
-    if (activeMode === 1) {
-      const { features, arrowFeatures } = buildFlowFeatures(od.internal, centroidMap.current)
-      setSource(map, 'flows-single',   toGeoJSON(features))
-      setSource(map, 'arrows-single',  toGeoJSON(arrowFeatures))
-      setSource(map, 'flows-internal', empty)
-      setSource(map, 'arrows-internal', empty)
-      setSource(map, 'flows-external', empty)
-      setSource(map, 'arrows-external', empty)
-    } else if (activeMode === 2) {
-      const { features, arrowFeatures } = buildFlowFeatures(od.internal, centroidMap.current)
-      setSource(map, 'flows-internal',  toGeoJSON(features))
-      setSource(map, 'arrows-internal', toGeoJSON(arrowFeatures))
-      setSource(map, 'flows-single',   empty)
-      setSource(map, 'arrows-single',  empty)
-      setSource(map, 'flows-external', empty)
-      setSource(map, 'arrows-external', empty)
-    } else if (activeMode === 3) {
-      const { features, arrowFeatures } = buildFlowFeatures(od.external, centroidMap.current)
-      setSource(map, 'flows-external',  toGeoJSON(features))
-      setSource(map, 'arrows-external', toGeoJSON(arrowFeatures))
-      setSource(map, 'flows-single',   empty)
-      setSource(map, 'arrows-single',  empty)
-      setSource(map, 'flows-internal', empty)
-      setSource(map, 'arrows-internal', empty)
-    } else if (activeMode === 4) {
-      const { features: fi, arrowFeatures: ai } = buildFlowFeatures(od.internal, centroidMap.current)
-      const { features: fe, arrowFeatures: ae } = buildFlowFeatures(od.external, centroidMap.current)
-      setSource(map, 'flows-internal',  toGeoJSON(fi))
-      setSource(map, 'arrows-internal', toGeoJSON(ai))
-      setSource(map, 'flows-external',  toGeoJSON(fe))
-      setSource(map, 'arrows-external', toGeoJSON(ae))
-      setSource(map, 'flows-single',   empty)
-      setSource(map, 'arrows-single',  empty)
+    const { features: fo, arrowFeatures: ao } = buildFlowFeatures(od.outgoing, centroidMap.current)
+    const { features: fi, arrowFeatures: ai } = buildFlowFeatures(od.incoming, centroidMap.current)
+    const { features: fint, arrowFeatures: aint } = buildFlowFeatures(od.internal, centroidMap.current)
+
+    setSource(map, 'flows-outgoing',  toGeoJSON(fo))
+    setSource(map, 'arrows-outgoing', toGeoJSON(ao))
+    setSource(map, 'flows-incoming',  toGeoJSON(fi))
+    setSource(map, 'arrows-incoming', toGeoJSON(ai))
+    setSource(map, 'flows-internal',  toGeoJSON(fint))
+    setSource(map, 'arrows-internal', toGeoJSON(aint))
+
+    // line-offset shifts lines in screen pixels; icon-offset shifts arrows in icon-local
+    // screen pixels (rotated with icon-rotate), so both use the same unit automatically
+    const arrowOffset: [number, number] = hasOffset ? [LINE_OFFSET_PX / ARROW_SIZE, 0] : [0, 0]
+    map.setLayoutProperty('flows-outgoing-arrows', 'icon-offset', arrowOffset)
+    map.setLayoutProperty('flows-incoming-arrows', 'icon-offset', arrowOffset)
+    map.setPaintProperty('flows-outgoing-line', 'line-offset', hasOffset ? LINE_OFFSET_PX : 0)
+    map.setPaintProperty('flows-incoming-line', 'line-offset', hasOffset ? LINE_OFFSET_PX : 0)
+  }, [mapReady, od])
+
+  // ── Update zone labels: only selected zones + OD origins/destinations ────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+
+    const relevantIds = new Set<string>(selectedZoneIds)
+    for (const row of [...od.outgoing, ...od.incoming, ...od.internal]) {
+      relevantIds.add(row.origin_id)
+      relevantIds.add(row.dest_id)
     }
-  }, [mapReady, od, activeMode])
+
+    const labelFeatures: GeoJSON.Feature[] = []
+    for (const [id, { lat, lon, label }] of centroidMap.current) {
+      if (!relevantIds.has(id)) continue
+      labelFeatures.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lon, lat] },
+        properties: { label },
+      })
+    }
+    setSource(map, 'zone-labels', toGeoJSON(labelFeatures))
+  }, [mapReady, od, selectedZoneIds])
 
   // ── Basemap switching ────────────────────────────────────────────────────
   useEffect(() => {

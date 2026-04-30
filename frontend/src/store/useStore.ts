@@ -28,7 +28,7 @@ export const useStore = create<AppState>((set) => ({
   activeMode: 1,
   directionMode: 'both',
   selectedZoneIds: new Set(),
-  filters: { day: null, hourMin: 0, hourMax: 23, minTrips: 100, includeSelfLoops: false },
+  filters: { day: 'weekday', hourMin: 0, hourMax: 23, minTrips: 100, includeSelfLoops: false },
   hoveredZoneId: null,
   hoveredFlowId: null,
   activeBasemap: 'light',

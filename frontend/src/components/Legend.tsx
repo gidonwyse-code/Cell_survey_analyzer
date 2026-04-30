@@ -6,7 +6,7 @@ export default function Legend() {
   const od = useOD(activeLevel, activeMode, directionMode, selectedZoneIds, filters)
   if (selectedZoneIds.size === 0) return null
 
-  const allRows = [...od.internal, ...od.external]
+  const allRows = [...od.outgoing, ...od.incoming, ...od.internal]
   if (allRows.length === 0) return null
 
   const trips = allRows.map((r) => r.trips)
@@ -14,19 +14,16 @@ export default function Legend() {
   const maxT = Math.max(...trips)
 
   const filterSummary = [
-    filters.day ?? 'All days',
+    filters.day,
     `h${filters.hourMin}–h${filters.hourMax}`,
     filters.minTrips !== 100 ? `min ${filters.minTrips} trips` : null,
   ].filter(Boolean).join(' · ')
 
-  const colorEntries =
-    activeMode === 1 ? [{ color: 'var(--color-single)',   label: 'Flows' }]
-    : activeMode === 2 ? [{ color: 'var(--color-internal)', label: 'Internal flows' }]
-    : activeMode === 3 ? [{ color: 'var(--color-external)', label: 'External flows' }]
-    : [
-        { color: 'var(--color-internal)', label: 'Internal flows' },
-        { color: 'var(--color-external)', label: 'External flows' },
-      ]
+  const colorEntries = [
+    ...(od.outgoing.length > 0 ? [{ color: '#FC8181', label: 'Outgoing' }] : []),
+    ...(od.incoming.length > 0 ? [{ color: '#6EE7B7', label: 'Incoming' }] : []),
+    ...(od.internal.length > 0 ? [{ color: '#FB923C', label: 'Internal flows' }] : []),
+  ]
 
   return (
     <div className="absolute bottom-6 right-3 bg-gray-900/90 backdrop-blur border border-gray-700 rounded-lg p-3 text-xs text-gray-300 space-y-2 min-w-[160px] z-10">

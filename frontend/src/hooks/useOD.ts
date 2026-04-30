@@ -12,7 +12,7 @@ interface ODParams {
 
 function buildUrl(params: ODParams): string {
   const p = new URLSearchParams({ level: params.level })
-  if (params.filters.day) p.set('day', params.filters.day)
+  p.set('day', params.filters.day)
   p.set('hour_min', String(params.filters.hourMin))
   p.set('hour_max', String(params.filters.hourMax))
   p.set('min_trips', String(params.filters.minTrips))
@@ -31,8 +31,9 @@ async function fetchOD(url: string): Promise<{ data: ODRow[]; truncated: boolean
 }
 
 export interface ODResult {
+  outgoing: ODRow[]
+  incoming: ODRow[]
   internal: ODRow[]
-  external: ODRow[]
   truncated: boolean
   isLoading: boolean
 }
@@ -48,31 +49,29 @@ export function useOD(
   const enabled = ids.length > 0
 
   // Build query specs for each mode
-  const queries: Array<{ url: string; tag: 'internal' | 'external' }> = []
+  const queries: Array<{ url: string; tag: 'outgoing' | 'incoming' | 'internal' }> = []
 
   if (enabled) {
     if (mode === 1) {
       if (direction === 'outgoing' || direction === 'both') {
-        queries.push({ url: buildUrl({ level, filters, originIds: ids }), tag: 'internal' })
+        queries.push({ url: buildUrl({ level, filters, originIds: ids }), tag: 'outgoing' })
       }
       if (direction === 'incoming' || direction === 'both') {
-        queries.push({ url: buildUrl({ level, filters, destIds: ids }), tag: 'internal' })
+        queries.push({ url: buildUrl({ level, filters, destIds: ids }), tag: 'incoming' })
       }
     } else if (mode === 2) {
       queries.push({ url: buildUrl({ level, filters, originIds: ids, destIds: ids }), tag: 'internal' })
     } else if (mode === 3) {
       if (direction === 'outgoing' || direction === 'both') {
-        queries.push({ url: buildUrl({ level, filters, originIds: ids, excludeDestIds: ids }), tag: 'external' })
+        queries.push({ url: buildUrl({ level, filters, originIds: ids, excludeDestIds: ids }), tag: 'outgoing' })
       }
       if (direction === 'incoming' || direction === 'both') {
-        queries.push({ url: buildUrl({ level, filters, destIds: ids, excludeOriginIds: ids }), tag: 'external' })
+        queries.push({ url: buildUrl({ level, filters, destIds: ids, excludeOriginIds: ids }), tag: 'incoming' })
       }
     } else if (mode === 4) {
-      // Internal (Mode 2 logic)
       queries.push({ url: buildUrl({ level, filters, originIds: ids, destIds: ids }), tag: 'internal' })
-      // External outgoing + incoming (Mode 3 both)
-      queries.push({ url: buildUrl({ level, filters, originIds: ids, excludeDestIds: ids }), tag: 'external' })
-      queries.push({ url: buildUrl({ level, filters, destIds: ids, excludeOriginIds: ids }), tag: 'external' })
+      queries.push({ url: buildUrl({ level, filters, originIds: ids, excludeDestIds: ids }), tag: 'outgoing' })
+      queries.push({ url: buildUrl({ level, filters, destIds: ids, excludeOriginIds: ids }), tag: 'incoming' })
     }
   }
 
@@ -86,8 +85,9 @@ export function useOD(
     })),
   })
 
+  const outgoing: ODRow[] = []
+  const incoming: ODRow[] = []
   const internal: ODRow[] = []
-  const external: ODRow[] = []
   let truncated = false
   let isLoading = false
 
@@ -95,30 +95,17 @@ export function useOD(
     if (r.isLoading) isLoading = true
     if (r.data) {
       if (r.data.truncated) truncated = true
-      if (queries[i].tag === 'internal') internal.push(...r.data.data)
-      else external.push(...r.data.data)
+      const tag = queries[i].tag
+      if (tag === 'outgoing') outgoing.push(...r.data.data)
+      else if (tag === 'incoming') incoming.push(...r.data.data)
+      else internal.push(...r.data.data)
     }
   })
 
-  // For Mode 1 Both: deduplicate merged flows by origin+dest key
-  const deduped = (rows: ODRow[]): ODRow[] => {
-    if (rows.length === 0) return rows
-    const map = new Map<string, ODRow>()
-    for (const row of rows) {
-      const key = `${row.origin_id}|${row.dest_id}`
-      const existing = map.get(key)
-      if (existing) {
-        map.set(key, { ...existing, trips: existing.trips + row.trips })
-      } else {
-        map.set(key, row)
-      }
-    }
-    return [...map.values()]
-  }
-
   return {
-    internal: deduped(internal),
-    external: deduped(external),
+    outgoing,
+    incoming,
+    internal,
     truncated,
     isLoading,
   }

@@ -2,7 +2,7 @@ export type Level = 'TAZ_1270' | 'TAZ_250' | 'TAZ_33' | 'TAZ_15' | 'CITY'
 export type Mode = 1 | 2 | 3 | 4
 export type Direction = 'outgoing' | 'incoming' | 'both'
 export type Basemap = 'dark' | 'light' | 'osm'
-export type Day = 'weekday' | 'friday' | 'saturday' | null
+export type Day = 'weekday' | 'friday' | 'saturday'
 
 export interface Filters {
   day: Day

@@ -10,9 +10,9 @@ export default function Sidebar() {
   const { activeLevel, activeMode, directionMode, selectedZoneIds, filters } = useStore()
   const od = useOD(activeLevel, activeMode, directionMode, selectedZoneIds, filters)
 
-  const flowCount = od.internal.length + od.external.length
+  const flowCount = od.outgoing.length + od.incoming.length + od.internal.length
   const totalTrips = Math.round(
-    [...od.internal, ...od.external].reduce((s, r) => s + r.trips, 0)
+    [...od.outgoing, ...od.incoming, ...od.internal].reduce((s, r) => s + r.trips, 0)
   )
 
   return (
