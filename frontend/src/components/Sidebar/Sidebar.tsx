@@ -7,7 +7,7 @@ import { useStore } from '../../store/useStore'
 import { useOD } from '../../hooks/useOD'
 
 export default function Sidebar() {
-  const { activeLevel, activeMode, directionMode, selectedZoneIds, filters } = useStore()
+  const { activeLevel, activeMode, directionMode, selectedZoneIds, filters, setPieChartOpen } = useStore()
   const od = useOD(activeLevel, activeMode, directionMode, selectedZoneIds, filters)
 
   const flowCount = od.outgoing.length + od.incoming.length + od.internal.length
@@ -36,7 +36,16 @@ export default function Sidebar() {
           <p className="text-xs text-gray-600">Select zones on the map to visualize flows</p>
         ) : (
           <>
-            <p className="text-xs text-gray-400">{flowCount.toLocaleString()} flows · {totalTrips.toLocaleString()} trips</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-gray-400">{flowCount.toLocaleString()} flows · {totalTrips.toLocaleString()} trips</p>
+              <button
+                onClick={() => setPieChartOpen(true)}
+                disabled={flowCount === 0}
+                className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              >
+                Chart
+              </button>
+            </div>
             {od.truncated && (
               <p className="text-xs text-amber-400">⚠ Showing top 5,000 flows (results truncated)</p>
             )}

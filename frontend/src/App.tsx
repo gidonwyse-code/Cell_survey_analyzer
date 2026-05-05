@@ -1,6 +1,7 @@
 import MapView from './components/Map/MapView'
 import Sidebar from './components/Sidebar/Sidebar'
 import Legend from './components/Legend'
+import PieChartModal from './components/PieChartModal'
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
         <MapView />
         <Legend />
       </div>
+      <PieChartModal />
     </div>
   )
 }

@@ -15,7 +15,7 @@ export default function Legend() {
 
   const filterSummary = [
     filters.day,
-    `h${filters.hourMin}–h${filters.hourMax}`,
+    `h${filters.hourMin}–h${filters.hourMax} (excl.)`,
     filters.minTrips !== 100 ? `min ${filters.minTrips} trips` : null,
   ].filter(Boolean).join(' · ')
 

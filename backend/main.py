@@ -101,7 +101,7 @@ def get_od(
     level: str = Query(...),
     day: Optional[str] = None,
     hour_min: int = 0,
-    hour_max: int = 23,
+    hour_max: int = 24,
     min_trips: float = 1.0,
     origin_ids: Optional[str] = None,
     dest_ids: Optional[str] = None,
@@ -130,7 +130,7 @@ def get_od(
 
     conditions = [
         f"od.hour >= {int(hour_min)}",
-        f"od.hour <= {int(hour_max)}",
+        f"od.hour < {int(hour_max)}",
     ]
     if day:
         conditions.append(f"od.day = '{day}'")

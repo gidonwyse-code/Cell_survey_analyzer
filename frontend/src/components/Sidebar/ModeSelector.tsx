@@ -4,7 +4,7 @@ import type { Mode, Direction } from '../../types'
 const MODES: Array<{ value: Mode; label: string; minZones: number }> = [
   { value: 1, label: 'Single Zone',       minZones: 1 },
   { value: 2, label: 'Internal',          minZones: 2 },
-  { value: 3, label: 'Group vs External', minZones: 1 },
+  { value: 3, label: 'Group vs External', minZones: 2 },
   { value: 4, label: 'Combined',          minZones: 2 },
 ]
 

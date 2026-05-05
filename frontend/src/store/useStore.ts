@@ -11,6 +11,7 @@ interface AppState {
   hoveredFlowId: string | null
   activeBasemap: Basemap
   showFlowLabels: boolean
+  isPieChartOpen: boolean
 
   setLevel: (l: Level) => void
   setMode: (m: Mode) => void
@@ -23,6 +24,7 @@ interface AppState {
   setHoveredFlow: (id: string | null) => void
   setBasemap: (b: Basemap) => void
   setShowFlowLabels: (v: boolean) => void
+  setPieChartOpen: (v: boolean) => void
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -30,11 +32,12 @@ export const useStore = create<AppState>((set) => ({
   activeMode: 1,
   directionMode: 'both',
   selectedZoneIds: new Set(),
-  filters: { day: 'weekday', hourMin: 0, hourMax: 23, minTrips: 100, includeSelfLoops: false },
+  filters: { day: 'weekday', hourMin: 0, hourMax: 24, minTrips: 100, includeSelfLoops: false },
   hoveredZoneId: null,
   hoveredFlowId: null,
   activeBasemap: 'light',
   showFlowLabels: false,
+  isPieChartOpen: false,
 
   setLevel: (l) => set({ activeLevel: l, selectedZoneIds: new Set(), activeMode: 1 }),
   setMode: (m) => set({ activeMode: m }),
@@ -72,4 +75,5 @@ export const useStore = create<AppState>((set) => ({
   setHoveredFlow: (id) => set({ hoveredFlowId: id }),
   setBasemap: (b) => set({ activeBasemap: b }),
   setShowFlowLabels: (v) => set({ showFlowLabels: v }),
+  setPieChartOpen: (v) => set({ isPieChartOpen: v }),
 }))

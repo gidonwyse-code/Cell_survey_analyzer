@@ -180,8 +180,8 @@ export default function MapView() {
         paint: {
           'fill-color': [
             'case',
-            ['boolean', ['feature-state', 'selected'], false], '#38BDF8',
-            ['boolean', ['feature-state', 'hovered'], false], 'rgba(56,189,248,0.25)',
+            ['boolean', ['feature-state', 'selected'], false], 'rgba(56,189,248,0.50)',
+            ['boolean', ['feature-state', 'hovered'], false], 'rgba(56,189,248,0.20)',
             'rgba(0,0,0,0.04)',
           ],
           'fill-opacity': 1,
@@ -477,9 +477,10 @@ export default function MapView() {
     const isDark = activeBasemap === 'dark'
     map.setPaintProperty('zones-fill', 'fill-color', [
       'case',
-      ['boolean', ['feature-state', 'selected'], false], '#38BDF8',
+      ['boolean', ['feature-state', 'selected'], false],
+      isDark ? 'rgba(56,189,248,0.55)' : 'rgba(56,189,248,0.50)',
       ['boolean', ['feature-state', 'hovered'], false],
-      isDark ? 'rgba(255,255,255,0.15)' : 'rgba(56,189,248,0.25)',
+      isDark ? 'rgba(255,255,255,0.18)' : 'rgba(56,189,248,0.20)',
       isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
     ])
     map.setPaintProperty('zones-outline', 'line-color',

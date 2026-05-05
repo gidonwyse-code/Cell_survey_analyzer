@@ -50,7 +50,7 @@ export default function FilterPanel() {
       {/* Hour range */}
       <div>
         <div className="text-xs text-gray-500 mb-1">
-          Hour range: h{local.hourMin} – h{local.hourMax}
+          Hour range: h{local.hourMin} – h{local.hourMax} (excl.)
         </div>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -65,7 +65,7 @@ export default function FilterPanel() {
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500 w-6">To</span>
             <input
-              type="range" min={0} max={23} value={local.hourMax}
+              type="range" min={0} max={24} value={local.hourMax}
               onChange={(e) => apply({ hourMax: Math.max(Number(e.target.value), local.hourMin) })}
               className="flex-1 h-1 accent-sky-500"
             />
