@@ -15,10 +15,11 @@ const DIRS: Array<{ value: Direction; label: string }> = [
 ]
 
 export default function ModeSelector() {
-  const { activeMode, directionMode, selectedZoneIds, setMode, setDirectionMode } = useStore()
+  const { activeMode, directionMode, selectedZoneIds, mapLevel, mapRole, counterpartLevel, setMode, setDirectionMode } = useStore()
   const count = selectedZoneIds.size
   if (count === 0) return null
 
+  const splitLevels = mapLevel !== counterpartLevel
   const visibleModes = MODES.filter((m) => count >= m.minZones)
 
   return (
@@ -26,12 +27,15 @@ export default function ModeSelector() {
       <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Visualization Mode</div>
       <div className="flex flex-col gap-1">
         {visibleModes.map((m) => {
-          const disabled = m.value === 1 && count >= 2
+          const disabledSingleZone = m.value === 1 && count >= 2
+          const disabledSplit = splitLevels && m.value !== 1
+          const disabled = disabledSingleZone || disabledSplit
           return (
             <button
               key={m.value}
               onClick={() => !disabled && setMode(m.value)}
               disabled={disabled}
+              title={disabledSplit ? 'Requires matching levels' : undefined}
               className={`w-full py-1.5 rounded text-xs font-medium text-left px-3 transition-colors ${
                 disabled
                   ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
@@ -46,7 +50,7 @@ export default function ModeSelector() {
         })}
       </div>
 
-      {(activeMode === 1 || activeMode === 3) && (
+      {mapRole === 'origin' && (activeMode === 1 || activeMode === 3) && (
         <div className="mt-2">
           <div className="text-xs text-gray-500 mb-1">Direction</div>
           <div className="flex gap-1">

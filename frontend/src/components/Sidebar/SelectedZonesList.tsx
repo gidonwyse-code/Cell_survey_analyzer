@@ -3,8 +3,8 @@ import { useStore } from '../../store/useStore'
 import { useZones } from '../../hooks/useZones'
 
 export default function SelectedZonesList() {
-  const { activeLevel, selectedZoneIds, removeZone, clearZones, toggleZone } = useStore()
-  const { data: zonesData } = useZones(activeLevel)
+  const { mapLevel, selectedZoneIds, removeZone, clearZones, toggleZone } = useStore()
+  const { data: zonesData } = useZones(mapLevel)
   const [search, setSearch] = useState('')
 
   if (!zonesData) return null

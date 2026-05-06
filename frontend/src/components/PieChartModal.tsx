@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useStore } from '../store/useStore'
 import { useOD } from '../hooks/useOD'
@@ -67,60 +67,20 @@ function sliceColor(d: SliceData, i: number): string {
 }
 
 const RADIAN = Math.PI / 180
-function renderLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent, label }: any) {
-  if (percent < 0.05) return null
-  const sin = Math.sin(-midAngle * RADIAN)
-  const cos = Math.cos(-midAngle * RADIAN)
-  const isRight = cos >= 0
-
-  // Inside percentage (only if slice is wide enough)
-  const midR = (innerRadius + outerRadius) / 2
-  const showInside = percent >= 0.08
-
-  // Elbow leader line: outer edge → bend point (radial) → horizontal arm
-  const sx = cx + (outerRadius + 3) * cos
-  const sy = cy + (outerRadius + 3) * sin
-  const bx = cx + (outerRadius + 14) * cos   // bend
-  const by = cy + (outerRadius + 14) * sin
-  const ex = bx + (isRight ? 10 : -10)       // horizontal arm end
-  // ey === by (arm is horizontal)
-
-  // Text sits just beyond the arm end, anchored at the arm-end edge
-  const anchor = isRight ? 'end' : 'start'
-  const tx = ex + (isRight ? 3 : -3)
-
-  return (
-    <g>
-      {showInside && (
-        <text
-          x={cx + midR * cos} y={cy + midR * sin}
-          fill="white" textAnchor="middle" dominantBaseline="central"
-          fontSize={10} fontWeight="600"
-        >
-          {`${(percent * 100).toFixed(0)}%`}
-        </text>
-      )}
-      <polyline
-        points={`${sx},${sy} ${bx},${by} ${ex},${by}`}
-        fill="none" stroke="#9CA3AF" strokeWidth={1}
-      />
-      <text x={tx} y={by} fill="#374151" textAnchor={anchor} dominantBaseline="central" fontSize={10}>
-        {label}
-      </text>
-    </g>
-  )
-}
+const RADIAL_EXT = 14  // px beyond pie edge for the elbow bend
 
 export default function PieChartModal() {
   const {
-    activeLevel, activeMode, directionMode,
+    mapLevel, mapRole, counterpartLevel, activeMode, directionMode,
     selectedZoneIds, filters,
     isPieChartOpen, setPieChartOpen,
   } = useStore()
 
-  const od = useOD(activeLevel, activeMode, directionMode, selectedZoneIds, filters)
-  const { data: zonesData } = useZones(activeLevel)
+  const od = useOD(mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters)
+  const { data: zonesData } = useZones(mapLevel)
+  const { data: counterpartZonesData } = useZones(counterpartLevel)
 
+  // labelMap for map-level zones (selected zones, and origin side when mapRole='origin')
   const labelMap = useMemo(() => {
     const m = new Map<string, string>()
     for (const f of zonesData?.features ?? []) {
@@ -128,6 +88,19 @@ export default function PieChartModal() {
     }
     return m
   }, [zonesData])
+
+  // counterpartLabelMap for the other side
+  const counterpartLabelMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const f of counterpartZonesData?.features ?? []) {
+      m.set(f.properties.id, f.properties.label)
+    }
+    return m
+  }, [counterpartZonesData])
+
+  // Resolve which label map corresponds to origins and destinations
+  const origLabelMap = mapRole === 'origin' ? labelMap : counterpartLabelMap
+  const destLabelMap = mapRole === 'origin' ? counterpartLabelMap : labelMap
 
   // ── Tabs ─────────────────────────────────────────────────────────────────
   const tabs = useMemo((): Array<{ id: TabId; label: string }> => {
@@ -141,19 +114,21 @@ export default function PieChartModal() {
       { id: 'origin', label: 'לפי מוצא' },
       { id: 'dest',   label: 'לפי יעד' },
     ]
+    if (mapRole === 'destination') return []  // single incoming query, no tabs needed
     if (directionMode === 'both') return [
       { id: 'outgoing', label: 'יוצא' },
       { id: 'incoming', label: 'נכנס' },
     ]
     return []
-  }, [activeMode, directionMode])
+  }, [activeMode, directionMode, mapRole])
 
   const defaultTab = useMemo((): TabId => {
     if (activeMode === 4) return 'overview'
     if (activeMode === 2) return 'origin'
+    if (mapRole === 'destination') return 'incoming'
     if (directionMode === 'incoming') return 'incoming'
     return 'outgoing'
-  }, [activeMode, directionMode])
+  }, [activeMode, directionMode, mapRole])
 
   const [tab, setTab] = useState<TabId>(defaultTab)
   const [topN, setTopN] = useState(10)
@@ -174,15 +149,90 @@ export default function PieChartModal() {
       { id: 'incoming', label: 'נכנס',  trips: sumTrips(od.incoming), fixedColor: '#6EE7B7' },
       { id: 'internal', label: 'פנימי', trips: sumTrips(od.internal), fixedColor: '#FB923C' },
     ].filter(d => d.trips > 0)
-    if (tab === 'outgoing') return aggregate(od.outgoing, 'dest_id',   topN, labelMap)
-    if (tab === 'incoming') return aggregate(od.incoming, 'origin_id', topN, labelMap)
-    if (tab === 'internal') return aggregate(od.internal, 'dest_id',   topN, labelMap)
-    if (tab === 'origin')   return aggregate(od.internal, 'origin_id', topN, labelMap)
-    if (tab === 'dest')     return aggregate(od.internal, 'dest_id',   topN, labelMap)
+    if (tab === 'outgoing') return aggregate(od.outgoing, 'dest_id',   topN, destLabelMap)
+    if (tab === 'incoming') return aggregate(od.incoming, 'origin_id', topN, origLabelMap)
+    if (tab === 'internal') return aggregate(od.internal, 'dest_id',   topN, destLabelMap)
+    if (tab === 'origin')   return aggregate(od.internal, 'origin_id', topN, origLabelMap)
+    if (tab === 'dest')     return aggregate(od.internal, 'dest_id',   topN, destLabelMap)
     return []
-  }, [tab, od, topN, labelMap])
+  }, [tab, od, topN, labelMap, counterpartLabelMap, mapRole])
 
   const total = pieData.reduce((s, d) => s + d.trips, 0)
+
+  // ── Pre-compute label y-positions with anti-overlap ───────────────────────
+  // renderLabel is called once per slice without knowing neighbours, so we
+  // pre-compute all positions here and close over them in the callback.
+  const labelPositions = useMemo(() => {
+    if (!total) return new Map<number, number>()
+    const MIN_GAP = 13     // minimum vertical gap (px) between adjacent baselines
+    const outerRadius = 78 // must match <Pie outerRadius>
+    const leftEntries:  Array<{ index: number; rawByRel: number }> = []
+    const rightEntries: Array<{ index: number; rawByRel: number }> = []
+    let accAngle = 0
+    for (let i = 0; i < pieData.length; i++) {
+      const percent = pieData[i].trips / total
+      const sliceAngle = percent * 360
+      const midAngle   = accAngle + sliceAngle / 2
+      accAngle += sliceAngle
+      if (percent < 0.05) continue
+      const sin      = Math.sin(-midAngle * RADIAN)
+      const cos      = Math.cos(-midAngle * RADIAN)
+      const rawByRel = (outerRadius + RADIAL_EXT) * sin
+      if (cos >= 0) rightEntries.push({ index: i, rawByRel })
+      else          leftEntries.push({ index: i, rawByRel })
+    }
+    const result = new Map<number, number>()
+    for (const side of [leftEntries, rightEntries]) {
+      side.sort((a, b) => a.rawByRel - b.rawByRel)
+      let lastY = -Infinity
+      for (const entry of side) {
+        const y = Math.max(entry.rawByRel, lastY + MIN_GAP)
+        result.set(entry.index, y)
+        lastY = y
+      }
+    }
+    return result
+  }, [pieData, total])
+
+  const renderLabel = useCallback(
+    ({ cx, cy, midAngle, innerRadius, outerRadius, percent, label, index }: any) => {
+      if (percent < 0.05) return null
+      const sin    = Math.sin(-midAngle * RADIAN)
+      const cos    = Math.cos(-midAngle * RADIAN)
+      const isRight = cos >= 0
+
+      const midR  = (innerRadius + outerRadius) / 2
+      const sx    = cx + (outerRadius + 3) * cos
+      const sy    = cy + (outerRadius + 3) * sin
+      const bx       = cx + (outerRadius + RADIAL_EXT) * cos
+      const adjByRel = labelPositions.get(index)
+      const adjBy    = adjByRel !== undefined ? cy + adjByRel : cy + (outerRadius + RADIAL_EXT) * sin
+
+      const ex     = bx + (isRight ? 10 : -10)
+      const anchor = isRight ? 'end' : 'start'
+      const tx     = ex + (isRight ? 3 : -3)
+
+      // Elbow line: diagonal radial segment to adjusted y → horizontal arm
+      const pts = `${sx},${sy} ${bx},${adjBy} ${ex},${adjBy}`
+
+      return (
+        <g>
+          <text
+            x={cx + midR * cos} y={cy + midR * sin}
+            fill="white" textAnchor="middle" dominantBaseline="central"
+            fontSize={10} fontWeight="600"
+          >
+            {`${(percent * 100).toFixed(0)}%`}
+          </text>
+          <polyline points={pts} fill="none" stroke="#9CA3AF" strokeWidth={1} />
+          <text x={tx} y={adjBy} fill="#374151" textAnchor={anchor} dominantBaseline="central" fontSize={10}>
+            {label}
+          </text>
+        </g>
+      )
+    },
+    [labelPositions],
+  )
 
   // ── Filter description line ───────────────────────────────────────────────
   const DAY_LABEL: Record<string, string> = {

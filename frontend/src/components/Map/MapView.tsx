@@ -121,26 +121,29 @@ export default function MapView() {
   const [mapReady, setMapReady] = useState(false)
 
   const {
-    activeLevel, activeMode, directionMode,
+    mapLevel, mapRole, counterpartLevel, activeMode, directionMode,
     selectedZoneIds, filters, activeBasemap,
-    showFlowLabels,
+    showFlowLabels, flowGradient,
     toggleZone,
   } = useStore()
 
-  const { data: zonesData } = useZones(activeLevel)
-  const od = useOD(activeLevel, activeMode, directionMode, selectedZoneIds, filters)
+  const { data: zonesData } = useZones(mapLevel)
+  const { data: counterpartZonesData } = useZones(counterpartLevel)
+  const od = useOD(mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters)
 
-  // Centroid lookup for flow line drawing
+  // Merged centroid lookup covering both mapLevel and counterpartLevel zones
   const centroidMap = useRef(new Map<string, { lat: number; lon: number; label: string }>())
   useEffect(() => {
-    if (!zonesData) return
     const m = new Map<string, { lat: number; lon: number; label: string }>()
-    for (const f of zonesData.features) {
-      const p = f.properties
-      m.set(p.id, { lat: p.centroid_lat, lon: p.centroid_lon, label: p.label })
+    for (const dataset of [zonesData, counterpartZonesData]) {
+      if (!dataset) continue
+      for (const f of dataset.features) {
+        const p = f.properties
+        m.set(p.id, { lat: p.centroid_lat, lon: p.centroid_lon, label: p.label })
+      }
     }
     centroidMap.current = m
-  }, [zonesData])
+  }, [zonesData, counterpartZonesData])
 
   // ── Initialize map once ──────────────────────────────────────────────────
   useEffect(() => {
@@ -410,9 +413,9 @@ export default function MapView() {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    const minzoom = activeLevel === 'TAZ_1270' ? 10 : activeLevel === 'TAZ_250' ? 8 : 6
+    const minzoom = mapLevel === 'TAZ_1270' ? 10 : mapLevel === 'TAZ_250' ? 8 : 6
     map.setLayerZoomRange('zones-labels', minzoom, 24)
-  }, [mapReady, activeLevel])
+  }, [mapReady, mapLevel])
 
   // ── Update flow lines ────────────────────────────────────────────────────
   useEffect(() => {
@@ -442,6 +445,19 @@ export default function MapView() {
       map.setLayoutProperty(`flows-${tag}-labels`, 'visibility', visibility)
     }
   }, [mapReady, showFlowLabels])
+
+  // ── Flow opacity gradient ────────────────────────────────────────────────
+  // width ranges 2–14 (set in buildFlowFeatures); map that to opacity 0.2–0.85
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const opacityExpr = flowGradient
+      ? ['interpolate', ['linear'], ['get', 'width'], 2, 0.2, 14, 0.85] as unknown as number
+      : 0.75
+    for (const tag of ['outgoing', 'incoming', 'internal'] as const) {
+      map.setPaintProperty(`flows-${tag}-line`, 'line-opacity', opacityExpr)
+    }
+  }, [mapReady, flowGradient])
 
   // ── Update zone labels: only selected zones + OD origins/destinations ────
   useEffect(() => {

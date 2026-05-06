@@ -2,7 +2,8 @@ import { useQueries } from '@tanstack/react-query'
 import type { Filters, Level, Mode, Direction, ODRow } from '../types'
 
 interface ODParams {
-  level: Level
+  originLevel: Level
+  destLevel: Level
   filters: Filters
   originIds?: string[]
   destIds?: string[]
@@ -11,7 +12,13 @@ interface ODParams {
 }
 
 function buildUrl(params: ODParams): string {
-  const p = new URLSearchParams({ level: params.level })
+  const p = new URLSearchParams()
+  if (params.originLevel === params.destLevel) {
+    p.set('level', params.originLevel)
+  } else {
+    p.set('origin_level', params.originLevel)
+    p.set('dest_level', params.destLevel)
+  }
   p.set('day', params.filters.day)
   p.set('hour_min', String(params.filters.hourMin))
   p.set('hour_max', String(params.filters.hourMax))
@@ -39,7 +46,9 @@ export interface ODResult {
 }
 
 export function useOD(
-  level: Level,
+  mapLevel: Level,
+  mapRole: 'origin' | 'destination',
+  counterpartLevel: Level,
   mode: Mode,
   direction: Direction,
   selectedZoneIds: Set<string>,
@@ -52,26 +61,38 @@ export function useOD(
   const queries: Array<{ url: string; tag: 'outgoing' | 'incoming' | 'internal' }> = []
 
   if (enabled) {
-    if (mode === 1) {
+    if (mapRole === 'destination') {
+      // Selected zones are destinations; query flows FROM counterpart origins TO them
+      queries.push({
+        url: buildUrl({ originLevel: counterpartLevel, destLevel: mapLevel, filters, destIds: ids }),
+        tag: 'incoming',
+      })
+    } else if (mode === 1) {
       if (direction === 'outgoing' || direction === 'both') {
-        queries.push({ url: buildUrl({ level, filters, originIds: ids }), tag: 'outgoing' })
+        queries.push({
+          url: buildUrl({ originLevel: mapLevel, destLevel: counterpartLevel, filters, originIds: ids }),
+          tag: 'outgoing',
+        })
       }
       if (direction === 'incoming' || direction === 'both') {
-        queries.push({ url: buildUrl({ level, filters, destIds: ids }), tag: 'incoming' })
+        queries.push({
+          url: buildUrl({ originLevel: counterpartLevel, destLevel: mapLevel, filters, destIds: ids }),
+          tag: 'incoming',
+        })
       }
     } else if (mode === 2) {
-      queries.push({ url: buildUrl({ level, filters, originIds: ids, destIds: ids }), tag: 'internal' })
+      queries.push({ url: buildUrl({ originLevel: mapLevel, destLevel: mapLevel, filters, originIds: ids, destIds: ids }), tag: 'internal' })
     } else if (mode === 3) {
       if (direction === 'outgoing' || direction === 'both') {
-        queries.push({ url: buildUrl({ level, filters, originIds: ids, excludeDestIds: ids }), tag: 'outgoing' })
+        queries.push({ url: buildUrl({ originLevel: mapLevel, destLevel: mapLevel, filters, originIds: ids, excludeDestIds: ids }), tag: 'outgoing' })
       }
       if (direction === 'incoming' || direction === 'both') {
-        queries.push({ url: buildUrl({ level, filters, destIds: ids, excludeOriginIds: ids }), tag: 'incoming' })
+        queries.push({ url: buildUrl({ originLevel: mapLevel, destLevel: mapLevel, filters, destIds: ids, excludeOriginIds: ids }), tag: 'incoming' })
       }
     } else if (mode === 4) {
-      queries.push({ url: buildUrl({ level, filters, originIds: ids, destIds: ids }), tag: 'internal' })
-      queries.push({ url: buildUrl({ level, filters, originIds: ids, excludeDestIds: ids }), tag: 'outgoing' })
-      queries.push({ url: buildUrl({ level, filters, destIds: ids, excludeOriginIds: ids }), tag: 'incoming' })
+      queries.push({ url: buildUrl({ originLevel: mapLevel, destLevel: mapLevel, filters, originIds: ids, destIds: ids }), tag: 'internal' })
+      queries.push({ url: buildUrl({ originLevel: mapLevel, destLevel: mapLevel, filters, originIds: ids, excludeDestIds: ids }), tag: 'outgoing' })
+      queries.push({ url: buildUrl({ originLevel: mapLevel, destLevel: mapLevel, filters, destIds: ids, excludeOriginIds: ids }), tag: 'incoming' })
     }
   }
 

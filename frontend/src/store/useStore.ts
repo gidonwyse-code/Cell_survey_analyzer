@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import type { Level, Mode, Direction, Basemap, Filters } from '../types'
 
 interface AppState {
-  activeLevel: Level
+  mapLevel: Level
+  mapRole: 'origin' | 'destination'
+  counterpartLevel: Level
   activeMode: Mode
   directionMode: Direction
   selectedZoneIds: Set<string>
@@ -11,9 +13,12 @@ interface AppState {
   hoveredFlowId: string | null
   activeBasemap: Basemap
   showFlowLabels: boolean
+  flowGradient: boolean
   isPieChartOpen: boolean
 
-  setLevel: (l: Level) => void
+  setMapLevel: (l: Level) => void
+  setMapRole: (r: 'origin' | 'destination') => void
+  setCounterpartLevel: (l: Level) => void
   setMode: (m: Mode) => void
   setDirectionMode: (d: Direction) => void
   toggleZone: (id: string, multi: boolean) => void
@@ -24,11 +29,14 @@ interface AppState {
   setHoveredFlow: (id: string | null) => void
   setBasemap: (b: Basemap) => void
   setShowFlowLabels: (v: boolean) => void
+  setFlowGradient: (v: boolean) => void
   setPieChartOpen: (v: boolean) => void
 }
 
 export const useStore = create<AppState>((set) => ({
-  activeLevel: 'TAZ_1270',
+  mapLevel: 'TAZ_1270',
+  mapRole: 'origin',
+  counterpartLevel: 'TAZ_1270',
   activeMode: 1,
   directionMode: 'both',
   selectedZoneIds: new Set(),
@@ -37,9 +45,15 @@ export const useStore = create<AppState>((set) => ({
   hoveredFlowId: null,
   activeBasemap: 'light',
   showFlowLabels: false,
+  flowGradient: false,
   isPieChartOpen: false,
 
-  setLevel: (l) => set({ activeLevel: l, selectedZoneIds: new Set(), activeMode: 1 }),
+  setMapLevel: (l) => set({ mapLevel: l, counterpartLevel: l, selectedZoneIds: new Set(), activeMode: 1 }),
+  setMapRole: (r) => set({ mapRole: r }),
+  setCounterpartLevel: (l) => set((s) => ({
+    counterpartLevel: l,
+    activeMode: l !== s.mapLevel ? 1 : s.activeMode,
+  })),
   setMode: (m) => set({ activeMode: m }),
   setDirectionMode: (d) => set({ directionMode: d }),
 
@@ -75,5 +89,6 @@ export const useStore = create<AppState>((set) => ({
   setHoveredFlow: (id) => set({ hoveredFlowId: id }),
   setBasemap: (b) => set({ activeBasemap: b }),
   setShowFlowLabels: (v) => set({ showFlowLabels: v }),
+  setFlowGradient: (v) => set({ flowGradient: v }),
   setPieChartOpen: (v) => set({ isPieChartOpen: v }),
 }))

@@ -7,8 +7,8 @@ import { useStore } from '../../store/useStore'
 import { useOD } from '../../hooks/useOD'
 
 export default function Sidebar() {
-  const { activeLevel, activeMode, directionMode, selectedZoneIds, filters, setPieChartOpen } = useStore()
-  const od = useOD(activeLevel, activeMode, directionMode, selectedZoneIds, filters)
+  const { mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters, setPieChartOpen } = useStore()
+  const od = useOD(mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters)
 
   const flowCount = od.outgoing.length + od.incoming.length + od.internal.length
   const totalTrips = Math.round(
@@ -18,9 +18,14 @@ export default function Sidebar() {
   return (
     <aside className="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-700 flex flex-col h-full overflow-y-auto">
       <div className="p-4 space-y-5 flex-1">
-        <div className="flex items-center gap-2 pb-2 border-b border-gray-700">
-          <div className="w-2 h-2 rounded-full bg-sky-400" />
-          <h1 className="text-sm font-semibold text-gray-200 tracking-wide">OD Viewer</h1>
+        <div className="pb-3 border-b border-gray-700">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 flex-shrink-0 rounded-full bg-sky-400" />
+            <h1 className="text-sm font-semibold text-gray-200 tracking-wide">Cellular Survey Data Analyzer</h1>
+          </div>
+          <p className="text-xs text-gray-500 leading-snug pl-4">
+            Information on national passenger movements from mobile phones, 2018–19, published by Israeli Ministry of Transport
+          </p>
         </div>
 
         <LevelSelector />

@@ -2,8 +2,8 @@ import { useStore } from '../store/useStore'
 import { useOD } from '../hooks/useOD'
 
 export default function Legend() {
-  const { activeLevel, activeMode, directionMode, selectedZoneIds, filters } = useStore()
-  const od = useOD(activeLevel, activeMode, directionMode, selectedZoneIds, filters)
+  const { mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters, flowGradient } = useStore()
+  const od = useOD(mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters)
   if (selectedZoneIds.size === 0) return null
 
   const allRows = [...od.outgoing, ...od.incoming, ...od.internal]
@@ -31,7 +31,13 @@ export default function Legend() {
       <div className="space-y-1">
         {colorEntries.map((e) => (
           <div key={e.label} className="flex items-center gap-2">
-            <div className="w-6 h-1.5 rounded" style={{ backgroundColor: e.color }} />
+            <div
+              className="w-6 h-1.5 rounded"
+              style={flowGradient
+                ? { background: `linear-gradient(to right, transparent, ${e.color})` }
+                : { backgroundColor: e.color }
+              }
+            />
             <span>{e.label}</span>
           </div>
         ))}
@@ -39,11 +45,13 @@ export default function Legend() {
 
       {/* Thickness scale */}
       <div className="space-y-0.5">
-        <div className="text-gray-500 text-xs">Line width ∝ trips¹·⁵</div>
+        <div className="text-gray-500 text-xs">
+          {flowGradient ? 'Width + opacity ∝ trips¹·⁵' : 'Line width ∝ trips¹·⁵'}
+        </div>
         <div className="flex items-end gap-1">
-          <div className="w-8 bg-gray-400 rounded" style={{ height: '2px' }} />
+          <div className="w-8 bg-gray-400 rounded" style={{ height: '2px', opacity: flowGradient ? 0.25 : 1 }} />
           <span className="text-gray-500">{Math.round(minT).toLocaleString()} min</span>
-          <div className="w-8 bg-gray-400 rounded" style={{ height: '14px' }} />
+          <div className="w-8 bg-gray-400 rounded" style={{ height: '14px', opacity: flowGradient ? 0.85 : 1 }} />
           <span className="text-gray-500">{Math.round(maxT).toLocaleString()} max</span>
         </div>
       </div>

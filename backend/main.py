@@ -96,9 +96,24 @@ def get_metadata():
     }
 
 
+def _build_lookup(base_gdf, level: str):
+    if level == "TAZ_1270":
+        lk = base_gdf[["TAZ_1270"]].copy()
+        lk.columns = ["taz_1270"]
+        lk["group_id"] = lk["taz_1270"]
+    else:
+        lk = base_gdf[["TAZ_1270", level]].copy()
+        lk.columns = ["taz_1270", "group_id"]
+    lk["taz_1270"] = lk["taz_1270"].astype(str)
+    lk["group_id"] = lk["group_id"].astype(str)
+    return lk
+
+
 @app.get("/api/od")
 def get_od(
-    level: str = Query(...),
+    level:        Optional[str] = Query(None),   # backward-compat alias
+    origin_level: Optional[str] = Query(None),
+    dest_level:   Optional[str] = Query(None),
     day: Optional[str] = None,
     hour_min: int = 0,
     hour_max: int = 24,
@@ -111,22 +126,20 @@ def get_od(
 ):
     t0 = time.time()
 
-    if level not in VALID_LEVELS:
-        raise HTTPException(400, f"Invalid level '{level}'")
+    eff_orig = origin_level or level
+    eff_dest = dest_level   or level
+    if not eff_orig or not eff_dest:
+        raise HTTPException(400, "Provide 'level', or both 'origin_level' and 'dest_level'")
+    if eff_orig not in VALID_LEVELS:
+        raise HTTPException(400, f"Invalid origin_level '{eff_orig}'")
+    if eff_dest not in VALID_LEVELS:
+        raise HTTPException(400, f"Invalid dest_level '{eff_dest}'")
     if day and day not in ("weekday", "friday", "saturday"):
         raise HTTPException(400, f"Invalid day '{day}'")
 
-    # Build TAZ_1270 → group_id lookup from the in-memory GeoDataFrame
     base_gdf = zones_gdf["TAZ_1270"]
-    if level == "TAZ_1270":
-        lookup = base_gdf[["TAZ_1270"]].copy()
-        lookup.columns = ["taz_1270"]
-        lookup["group_id"] = lookup["taz_1270"]
-    else:
-        lookup = base_gdf[["TAZ_1270", level]].copy()
-        lookup.columns = ["taz_1270", "group_id"]
-    lookup["taz_1270"] = lookup["taz_1270"].astype(str)
-    lookup["group_id"] = lookup["group_id"].astype(str)
+    orig_lookup = _build_lookup(base_gdf, eff_orig)
+    dest_lookup = _build_lookup(base_gdf, eff_dest)
 
     conditions = [
         f"od.hour >= {int(hour_min)}",
@@ -134,7 +147,8 @@ def get_od(
     ]
     if day:
         conditions.append(f"od.day = '{day}'")
-    if not include_self_loops:
+    # Self-loop filter only meaningful when both sides use the same level
+    if not include_self_loops and eff_orig == eff_dest:
         conditions.append("orig.group_id != dest.group_id")
 
     def parse_ids(s: Optional[str]) -> list[str]:
@@ -167,8 +181,8 @@ def get_od(
             dest.group_id  AS dest_id,
             SUM(od.trips)  AS trips
         FROM od_matrix od
-        JOIN taz_lookup orig ON od.from_zone = orig.taz_1270
-        JOIN taz_lookup dest ON od.to_zone   = dest.taz_1270
+        JOIN orig_lookup orig ON od.from_zone = orig.taz_1270
+        JOIN dest_lookup dest ON od.to_zone   = dest.taz_1270
         WHERE {where_clause}
         GROUP BY orig.group_id, dest.group_id
         HAVING SUM(od.trips) >= {float(min_trips)}
@@ -177,13 +191,14 @@ def get_od(
     """
 
     with _duckdb_lock:
-        con.register("taz_lookup", lookup)
+        con.register("orig_lookup", orig_lookup)
+        con.register("dest_lookup", dest_lookup)
         rows = con.execute(sql).fetchall()
     truncated = len(rows) > 5000
     data = [{"origin_id": r[0], "dest_id": r[1], "trips": float(r[2])} for r in rows[:5000]]
 
     elapsed = time.time() - t0
     logger.info(
-        f"GET /api/od level={level} day={day} rows={len(data)} truncated={truncated} {elapsed:.3f}s"
+        f"GET /api/od orig={eff_orig} dest={eff_dest} day={day} rows={len(data)} truncated={truncated} {elapsed:.3f}s"
     )
     return {"data": data, "truncated": truncated}
