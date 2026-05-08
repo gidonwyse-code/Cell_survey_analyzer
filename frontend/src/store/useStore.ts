@@ -14,6 +14,7 @@ interface AppState {
   activeBasemap: Basemap
   showFlowLabels: boolean
   flowGradient: boolean
+  showArrows: boolean
   isPieChartOpen: boolean
 
   setMapLevel: (l: Level) => void
@@ -30,6 +31,7 @@ interface AppState {
   setBasemap: (b: Basemap) => void
   setShowFlowLabels: (v: boolean) => void
   setFlowGradient: (v: boolean) => void
+  setShowArrows: (v: boolean) => void
   setPieChartOpen: (v: boolean) => void
 }
 
@@ -46,6 +48,7 @@ export const useStore = create<AppState>((set) => ({
   activeBasemap: 'light',
   showFlowLabels: false,
   flowGradient: true,
+  showArrows: true,
   isPieChartOpen: false,
 
   setMapLevel: (l) => set({ mapLevel: l, counterpartLevel: l, selectedZoneIds: new Set(), activeMode: 1 }),
@@ -90,5 +93,6 @@ export const useStore = create<AppState>((set) => ({
   setBasemap: (b) => set({ activeBasemap: b }),
   setShowFlowLabels: (v) => set({ showFlowLabels: v }),
   setFlowGradient: (v) => set({ flowGradient: v }),
+  setShowArrows: (v) => set({ showArrows: v }),
   setPieChartOpen: (v) => set({ isPieChartOpen: v }),
 }))

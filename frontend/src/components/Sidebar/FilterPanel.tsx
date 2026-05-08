@@ -9,7 +9,7 @@ const DAYS: Array<{ value: Day; label: string }> = [
 ]
 
 export default function FilterPanel() {
-  const { filters, setFilters, showFlowLabels, setShowFlowLabels, flowGradient, setFlowGradient } = useStore()
+  const { filters, setFilters, showFlowLabels, setShowFlowLabels, flowGradient, setFlowGradient, showArrows, setShowArrows } = useStore()
   const [local, setLocal] = useState(filters)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -112,6 +112,16 @@ export default function FilterPanel() {
           className="accent-sky-500"
         />
         <span className="text-xs text-gray-400">Flow opacity gradient</span>
+      </label>
+
+      {/* Direction arrows */}
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox" checked={showArrows}
+          onChange={(e) => setShowArrows(e.target.checked)}
+          className="accent-sky-500"
+        />
+        <span className="text-xs text-gray-400">Show direction arrows</span>
       </label>
     </div>
   )

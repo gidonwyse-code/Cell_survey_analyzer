@@ -123,7 +123,7 @@ export default function MapView() {
   const {
     mapLevel, mapRole, counterpartLevel, activeMode, directionMode,
     selectedZoneIds, filters, activeBasemap,
-    showFlowLabels, flowGradient,
+    showFlowLabels, flowGradient, showArrows,
     toggleZone,
   } = useStore()
 
@@ -445,6 +445,16 @@ export default function MapView() {
       map.setLayoutProperty(`flows-${tag}-labels`, 'visibility', visibility)
     }
   }, [mapReady, showFlowLabels])
+
+  // ── Toggle direction arrows ──────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const visibility = showArrows ? 'visible' : 'none'
+    for (const tag of ['outgoing', 'incoming', 'internal'] as const) {
+      map.setLayoutProperty(`flows-${tag}-arrows`, 'visibility', visibility)
+    }
+  }, [mapReady, showArrows])
 
   // ── Flow opacity gradient ────────────────────────────────────────────────
   // width ranges 2–14 (set in buildFlowFeatures); map that to opacity 0.2–0.85
