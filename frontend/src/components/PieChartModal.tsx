@@ -99,7 +99,7 @@ export default function PieChartModal() {
   }, [counterpartZonesData])
 
   // Resolve which label map corresponds to origins and destinations
-  const origLabelMap = mapRole === 'origin' ? labelMap : counterpartLabelMap
+  const origLabelMap = counterpartLabelMap
   const destLabelMap = mapRole === 'origin' ? counterpartLabelMap : labelMap
 
   // ── Tabs ─────────────────────────────────────────────────────────────────
