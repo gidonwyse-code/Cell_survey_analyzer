@@ -123,7 +123,7 @@ export default function MapView() {
   const {
     mapLevel, mapRole, counterpartLevel, activeMode, directionMode,
     selectedZoneIds, filters, activeBasemap,
-    showFlowLabels, flowGradient, showArrows,
+    showFlowLabels, roundFlowLabels, flowGradient, showArrows,
     toggleZone,
   } = useStore()
 
@@ -445,6 +445,22 @@ export default function MapView() {
       map.setLayoutProperty(`flows-${tag}-labels`, 'visibility', visibility)
     }
   }, [mapReady, showFlowLabels])
+
+  // ── Round flow line label values ─────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const textField = roundFlowLabels
+      ? ['to-string', ['case',
+          ['>=', ['get', 'trips'], 10000],
+          ['*', ['round', ['/', ['get', 'trips'], 100]], 100],
+          ['*', ['round', ['/', ['get', 'trips'], 10]], 10],
+        ]]
+      : ['to-string', ['round', ['get', 'trips']]]
+    for (const tag of ['outgoing', 'incoming', 'internal'] as const) {
+      map.setLayoutProperty(`flows-${tag}-labels`, 'text-field', textField)
+    }
+  }, [mapReady, roundFlowLabels])
 
   // ── Toggle direction arrows ──────────────────────────────────────────────
   useEffect(() => {

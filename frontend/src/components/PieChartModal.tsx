@@ -76,7 +76,8 @@ export default function PieChartModal() {
     isPieChartOpen, setPieChartOpen,
   } = useStore()
 
-  const od = useOD(mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters)
+  const pieFilters = useMemo(() => ({ ...filters, minTrips: 1 }), [filters])
+  const od = useOD(mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, pieFilters)
   const { data: zonesData } = useZones(mapLevel)
   const { data: counterpartZonesData } = useZones(counterpartLevel)
 

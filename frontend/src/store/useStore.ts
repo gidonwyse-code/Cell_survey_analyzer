@@ -13,6 +13,7 @@ interface AppState {
   hoveredFlowId: string | null
   activeBasemap: Basemap
   showFlowLabels: boolean
+  roundFlowLabels: boolean
   flowGradient: boolean
   showArrows: boolean
   isPieChartOpen: boolean
@@ -30,6 +31,7 @@ interface AppState {
   setHoveredFlow: (id: string | null) => void
   setBasemap: (b: Basemap) => void
   setShowFlowLabels: (v: boolean) => void
+  setRoundFlowLabels: (v: boolean) => void
   setFlowGradient: (v: boolean) => void
   setShowArrows: (v: boolean) => void
   setPieChartOpen: (v: boolean) => void
@@ -47,6 +49,7 @@ export const useStore = create<AppState>((set) => ({
   hoveredFlowId: null,
   activeBasemap: 'light',
   showFlowLabels: false,
+  roundFlowLabels: false,
   flowGradient: true,
   showArrows: true,
   isPieChartOpen: false,
@@ -92,6 +95,7 @@ export const useStore = create<AppState>((set) => ({
   setHoveredFlow: (id) => set({ hoveredFlowId: id }),
   setBasemap: (b) => set({ activeBasemap: b }),
   setShowFlowLabels: (v) => set({ showFlowLabels: v }),
+  setRoundFlowLabels: (v) => set({ roundFlowLabels: v }),
   setFlowGradient: (v) => set({ flowGradient: v }),
   setShowArrows: (v) => set({ showArrows: v }),
   setPieChartOpen: (v) => set({ isPieChartOpen: v }),

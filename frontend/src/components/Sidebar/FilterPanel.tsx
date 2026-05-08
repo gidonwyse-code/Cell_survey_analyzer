@@ -9,7 +9,7 @@ const DAYS: Array<{ value: Day; label: string }> = [
 ]
 
 export default function FilterPanel() {
-  const { filters, setFilters, showFlowLabels, setShowFlowLabels, flowGradient, setFlowGradient, showArrows, setShowArrows } = useStore()
+  const { filters, setFilters, showFlowLabels, setShowFlowLabels, roundFlowLabels, setRoundFlowLabels, flowGradient, setFlowGradient, showArrows, setShowArrows } = useStore()
   const [local, setLocal] = useState(filters)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -102,6 +102,16 @@ export default function FilterPanel() {
           className="accent-sky-500"
         />
         <span className="text-xs text-gray-400">Show trip counts on lines</span>
+      </label>
+      <label className={`flex items-center gap-2 cursor-pointer pr-0 ${!showFlowLabels ? 'opacity-40 pointer-events-none' : ''}`}>
+        <span className="text-gray-600 select-none">↳</span>
+        <input
+          type="checkbox" checked={roundFlowLabels}
+          onChange={(e) => setRoundFlowLabels(e.target.checked)}
+          className="accent-sky-500"
+          disabled={!showFlowLabels}
+        />
+        <span className="text-xs text-gray-400">Round counts (±10 / ±100)</span>
       </label>
 
       {/* Flow opacity gradient */}
