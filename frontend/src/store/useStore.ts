@@ -45,7 +45,7 @@ export const useStore = create<AppState>((set) => ({
   hoveredFlowId: null,
   activeBasemap: 'light',
   showFlowLabels: false,
-  flowGradient: false,
+  flowGradient: true,
   isPieChartOpen: false,
 
   setMapLevel: (l) => set({ mapLevel: l, counterpartLevel: l, selectedZoneIds: new Set(), activeMode: 1 }),
