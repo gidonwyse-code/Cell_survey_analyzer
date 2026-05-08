@@ -141,15 +141,28 @@ def get_od(
     orig_lookup = _build_lookup(base_gdf, eff_orig)
     dest_lookup = _build_lookup(base_gdf, eff_dest)
 
+    # Build internal-pairs lookup for cross-level hierarchical self-loop filtering.
+    # A flow (A, B) is "hierarchically internal" when A contains B or B contains A
+    # in the zone hierarchy — i.e. they share any TAZ_1270 row in zones.parquet.
+    internal_pairs_df = None
+    if not include_self_loops and eff_orig != eff_dest:
+        ip = base_gdf[[eff_orig, eff_dest]].drop_duplicates().copy()
+        ip.columns = ["orig_gid", "dest_gid"]
+        ip["orig_gid"] = ip["orig_gid"].astype(str)
+        ip["dest_gid"] = ip["dest_gid"].astype(str)
+        internal_pairs_df = ip
+
     conditions = [
         f"od.hour >= {int(hour_min)}",
         f"od.hour < {int(hour_max)}",
     ]
     if day:
         conditions.append(f"od.day = '{day}'")
-    # Self-loop filter only meaningful when both sides use the same level
-    if not include_self_loops and eff_orig == eff_dest:
-        conditions.append("orig.group_id != dest.group_id")
+    if not include_self_loops:
+        if eff_orig == eff_dest:
+            conditions.append("orig.group_id != dest.group_id")
+        else:
+            conditions.append("ip.orig_gid IS NULL")  # anti-join: not in internal_pairs
 
     def parse_ids(s: Optional[str]) -> list[str]:
         if not s:
@@ -175,6 +188,12 @@ def get_od(
 
     where_clause = " AND ".join(conditions)
 
+    join_extra = (
+        "LEFT JOIN internal_pairs ip "
+        "ON ip.orig_gid = orig.group_id AND ip.dest_gid = dest.group_id"
+        if internal_pairs_df is not None else ""
+    )
+
     sql = f"""
         SELECT
             orig.group_id  AS origin_id,
@@ -183,6 +202,7 @@ def get_od(
         FROM od_matrix od
         JOIN orig_lookup orig ON od.from_zone = orig.taz_1270
         JOIN dest_lookup dest ON od.to_zone   = dest.taz_1270
+        {join_extra}
         WHERE {where_clause}
         GROUP BY orig.group_id, dest.group_id
         HAVING SUM(od.trips) >= {float(min_trips)}
@@ -193,6 +213,8 @@ def get_od(
     with _duckdb_lock:
         con.register("orig_lookup", orig_lookup)
         con.register("dest_lookup", dest_lookup)
+        if internal_pairs_df is not None:
+            con.register("internal_pairs", internal_pairs_df)
         rows = con.execute(sql).fetchall()
     truncated = len(rows) > 5000
     data = [{"origin_id": r[0], "dest_id": r[1], "trips": float(r[2])} for r in rows[:5000]]
