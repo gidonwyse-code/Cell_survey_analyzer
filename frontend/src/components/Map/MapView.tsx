@@ -4,7 +4,6 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 maplibregl.setRTLTextPlugin(
   'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js',
-  null,
   true,
 )
 import { useStore } from '../../store/useStore'

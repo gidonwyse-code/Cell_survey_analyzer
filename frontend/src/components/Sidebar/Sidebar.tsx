@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import BasemapToggle from './BasemapToggle'
 import LevelSelector from './LevelSelector'
 import ModeSelector from './ModeSelector'
@@ -5,10 +6,27 @@ import FilterPanel from './FilterPanel'
 import SelectedZonesList from './SelectedZonesList'
 import { useStore } from '../../store/useStore'
 import { useOD } from '../../hooks/useOD'
+import { useZones } from '../../hooks/useZones'
+import { exportODFlows } from '../../utils/exportToExcel'
 
 export default function Sidebar() {
   const { mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters, setPieChartOpen } = useStore()
   const od = useOD(mapLevel, mapRole, counterpartLevel, activeMode, directionMode, selectedZoneIds, filters)
+  const { data: zonesData } = useZones(mapLevel)
+  const { data: counterpartZonesData } = useZones(counterpartLevel)
+
+  const labelMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const f of [...(zonesData?.features ?? []), ...(counterpartZonesData?.features ?? [])]) {
+      m.set(f.properties.id, f.properties.label)
+    }
+    return m
+  }, [zonesData, counterpartZonesData])
+
+  const selectedZoneNames = useMemo(() =>
+    [...selectedZoneIds].map(id => labelMap.get(id) ?? id),
+    [selectedZoneIds, labelMap],
+  )
 
   const flowCount = od.outgoing.length + od.incoming.length + od.internal.length
   const totalTrips = Math.round(
@@ -43,13 +61,22 @@ export default function Sidebar() {
           <>
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-gray-400">{flowCount.toLocaleString()} flows · {totalTrips.toLocaleString()} trips</p>
-              <button
-                onClick={() => setPieChartOpen(true)}
-                disabled={flowCount === 0}
-                className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-              >
-                Chart
-              </button>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => setPieChartOpen(true)}
+                  disabled={flowCount === 0}
+                  className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Chart
+                </button>
+                <button
+                  onClick={() => exportODFlows({ outgoing: od.outgoing, incoming: od.incoming, internal: od.internal, labelMap, selectedZoneNames, filters, level: mapLevel, truncated: od.truncated })}
+                  disabled={flowCount === 0}
+                  className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Export
+                </button>
+              </div>
             </div>
             {od.truncated && (
               <p className="text-xs text-amber-400">⚠ Showing top 5,000 flows (results truncated)</p>

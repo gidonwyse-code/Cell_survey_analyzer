@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, Sector, ResponsiveContainer } from 'recharts'
 import { useStore } from '../store/useStore'
 import { useOD } from '../hooks/useOD'
 import { useZones } from '../hooks/useZones'
+import { exportPieChartData, buildZoneList } from '../utils/exportToExcel'
 import type { ODRow } from '../types'
 
 const SLICE_COLORS = [
@@ -11,7 +12,7 @@ const SLICE_COLORS = [
 ]
 const OTHERS_COLOR = '#6B7280'
 
-type TabId = 'overview' | 'outgoing' | 'incoming' | 'internal' | 'origin' | 'dest'
+type TabId = 'overview' | 'outgoing' | 'incoming' | 'internal_origins' | 'internal_dests' | 'origin' | 'dest'
 
 interface SliceData {
   id: string
@@ -21,16 +22,13 @@ interface SliceData {
 }
 
 const ACCENT: Record<TabId, string> = {
-  overview: '#94A3B8',
-  outgoing: '#FC8181',
-  incoming: '#6EE7B7',
-  internal: '#FB923C',
-  origin:   '#FB923C',
-  dest:     '#FB923C',
-}
-
-function sumTrips(rows: ODRow[]) {
-  return rows.reduce((s, r) => s + r.trips, 0)
+  overview:         '#94A3B8',
+  outgoing:         '#FC8181',
+  incoming:         '#6EE7B7',
+  internal_origins: '#FB923C',
+  internal_dests:   '#FB923C',
+  origin:           '#FB923C',
+  dest:             '#FB923C',
 }
 
 function aggregate(
@@ -64,6 +62,56 @@ function sliceColor(d: SliceData, i: number): string {
   if (d.fixedColor) return d.fixedColor
   if (d.id === 'others') return OTHERS_COLOR
   return SLICE_COLORS[i % SLICE_COLORS.length]
+}
+
+interface ODResult {
+  outgoing: ODRow[]
+  incoming: ODRow[]
+  internal: ODRow[]
+}
+
+function getSubtitleForTab(tabId: TabId, activeMode: number, zoneName: string): string {
+  if (activeMode === 1) return tabId === 'outgoing' ? `יעדים מ-${zoneName}` : `מוצאים אל ${zoneName}`
+  if (activeMode === 2) return tabId === 'origin' ? `אילו אזורים מייצרים נסיעות פנימיות — ${zoneName}` : `אילו אזורים מושכים נסיעות פנימיות — ${zoneName}`
+  if (activeMode === 3) return tabId === 'outgoing' ? `יעדים חיצוניים מ-${zoneName}` : `מוצאים חיצוניים אל ${zoneName}`
+  if (tabId === 'overview')         return `פילוג לפי סוג נסיעה — ${zoneName}`
+  if (tabId === 'outgoing')         return `יעדים חיצוניים מ-${zoneName}`
+  if (tabId === 'incoming')         return `מוצאים חיצוניים אל ${zoneName}`
+  if (tabId === 'internal_origins') return `נסיעות פנימיות לפי אזור מוצא — ${zoneName}`
+  if (tabId === 'internal_dests')   return `נסיעות פנימיות לפי אזור יעד — ${zoneName}`
+  return ''
+}
+
+function getSlicesForTab(
+  tabId: TabId,
+  od: ODResult,
+  topN: number,
+  origLabelMap: Map<string, string>,
+  destLabelMap: Map<string, string>,
+  includeSelfLoops: boolean,
+): SliceData[] {
+  if (tabId === 'overview') {
+    const slices: SliceData[] = [
+      { id: 'outgoing', label: 'יוצא', trips: od.outgoing.reduce((s, r) => s + r.trips, 0), fixedColor: '#FC8181' },
+      { id: 'incoming', label: 'נכנס', trips: od.incoming.reduce((s, r) => s + r.trips, 0), fixedColor: '#6EE7B7' },
+    ]
+    if (includeSelfLoops) {
+      const interZone = od.internal.filter(r => r.origin_id !== r.dest_id).reduce((s, r) => s + r.trips, 0)
+      const intraZone = od.internal.filter(r => r.origin_id === r.dest_id).reduce((s, r) => s + r.trips, 0)
+      slices.push({ id: 'inter_selected', label: 'בין אזורים נבחרים', trips: interZone, fixedColor: '#FB923C' })
+      slices.push({ id: 'intra_zone',     label: 'פנים אזורי',         trips: intraZone, fixedColor: '#FBBF24' })
+    } else {
+      slices.push({ id: 'internal', label: 'פנימי', trips: od.internal.reduce((s, r) => s + r.trips, 0), fixedColor: '#FB923C' })
+    }
+    return slices.filter(d => d.trips > 0)
+  }
+  if (tabId === 'outgoing')         return aggregate(od.outgoing, 'dest_id',   topN, destLabelMap)
+  if (tabId === 'incoming')         return aggregate(od.incoming, 'origin_id', topN, origLabelMap)
+  if (tabId === 'internal_origins') return aggregate(od.internal, 'origin_id', topN, origLabelMap)
+  if (tabId === 'internal_dests')   return aggregate(od.internal, 'dest_id',   topN, destLabelMap)
+  if (tabId === 'origin')           return aggregate(od.internal, 'origin_id', topN, origLabelMap)
+  if (tabId === 'dest')             return aggregate(od.internal, 'dest_id',   topN, destLabelMap)
+  return []
 }
 
 const RADIAN = Math.PI / 180
@@ -106,10 +154,11 @@ export default function PieChartModal() {
   // ── Tabs ─────────────────────────────────────────────────────────────────
   const tabs = useMemo((): Array<{ id: TabId; label: string }> => {
     if (activeMode === 4) return [
-      { id: 'overview', label: 'סקירה' },
-      { id: 'outgoing', label: 'יוצא' },
-      { id: 'incoming', label: 'נכנס' },
-      { id: 'internal', label: 'פנימי' },
+      { id: 'overview',         label: 'סקירה' },
+      { id: 'outgoing',         label: 'יוצא' },
+      { id: 'incoming',         label: 'נכנס' },
+      { id: 'internal_origins', label: 'פנימי-מוצאים' },
+      { id: 'internal_dests',   label: 'פנימי-יעדים' },
     ]
     if (activeMode === 2) return [
       { id: 'origin', label: 'לפי מוצא' },
@@ -146,20 +195,33 @@ export default function PieChartModal() {
     return () => window.removeEventListener('keydown', onKey)
   }, [isPieChartOpen, setPieChartOpen])
 
+  // ── Zone name (used for subtitles) ───────────────────────────────────────
+  const selectedZoneNames = useMemo(() =>
+    [...selectedZoneIds].map(id => labelMap.get(id) ?? id),
+    [selectedZoneIds, labelMap],
+  )
+
+  const zoneName = useMemo(() => {
+    const ids = [...selectedZoneIds]
+    if (ids.length === 1) return labelMap.get(ids[0]) ?? 'האזור הנבחר'
+    return buildZoneList(ids, labelMap, 120)
+  }, [selectedZoneIds, labelMap])
+
   // ── Pie data ──────────────────────────────────────────────────────────────
-  const pieData = useMemo((): SliceData[] => {
-    if (tab === 'overview') return [
-      { id: 'outgoing', label: 'יוצא',  trips: sumTrips(od.outgoing), fixedColor: '#FC8181' },
-      { id: 'incoming', label: 'נכנס',  trips: sumTrips(od.incoming), fixedColor: '#6EE7B7' },
-      { id: 'internal', label: 'פנימי', trips: sumTrips(od.internal), fixedColor: '#FB923C' },
-    ].filter(d => d.trips > 0)
-    if (tab === 'outgoing') return aggregate(od.outgoing, 'dest_id',   topN, destLabelMap)
-    if (tab === 'incoming') return aggregate(od.incoming, 'origin_id', topN, origLabelMap)
-    if (tab === 'internal') return aggregate(od.internal, 'dest_id',   topN, destLabelMap)
-    if (tab === 'origin')   return aggregate(od.internal, 'origin_id', topN, origLabelMap)
-    if (tab === 'dest')     return aggregate(od.internal, 'dest_id',   topN, destLabelMap)
-    return []
-  }, [tab, od, topN, labelMap, counterpartLabelMap, mapRole])
+  const pieData = useMemo(
+    () => getSlicesForTab(tab, od, topN, origLabelMap, destLabelMap, filters.includeSelfLoops),
+    [tab, od, topN, origLabelMap, destLabelMap, filters.includeSelfLoops],
+  )
+
+  const allTabsData = useMemo(
+    () => tabs.map(t => ({
+      tabId: t.id,
+      tabLabel: t.label,
+      slices: getSlicesForTab(t.id, od, topN, origLabelMap, destLabelMap, filters.includeSelfLoops),
+      subtitle: getSubtitleForTab(t.id, activeMode, zoneName),
+    })),
+    [tabs, od, topN, origLabelMap, destLabelMap, filters.includeSelfLoops, activeMode, zoneName],
+  )
 
   const total = pieData.reduce((s, d) => s + d.trips, 0)
   const activeSlice = activeIndex !== null ? (pieData[activeIndex] ?? null) : null
@@ -252,30 +314,10 @@ export default function PieChartModal() {
   const filterLine = `${dayLabel} · ${timeLabel}`
 
   // ── Subtitle ──────────────────────────────────────────────────────────────
-  const subtitle = useMemo(() => {
-    const zoneName = selectedZoneIds.size === 1
-      ? (labelMap.get([...selectedZoneIds][0]) ?? 'האזור הנבחר')
-      : `${selectedZoneIds.size} אזורים`
-    if (activeMode === 1) {
-      return tab === 'outgoing'
-        ? `יעדים מ-${zoneName}`
-        : `מוצאים אל ${zoneName}`
-    }
-    if (activeMode === 2) {
-      return tab === 'origin'
-        ? 'אילו אזורים מייצרים נסיעות פנימיות'
-        : 'אילו אזורים מושכים נסיעות פנימיות'
-    }
-    if (activeMode === 3) {
-      return tab === 'outgoing'
-        ? `יעדים חיצוניים מ-${zoneName}`
-        : `מוצאים חיצוניים אל ${zoneName}`
-    }
-    if (tab === 'overview') return `פילוג לפי סוג נסיעה — ${zoneName}`
-    if (tab === 'outgoing') return `יעדים חיצוניים מ-${zoneName}`
-    if (tab === 'incoming') return `מוצאים חיצוניים אל ${zoneName}`
-    return `פילוג נסיעות פנימיות — ${zoneName}`
-  }, [activeMode, tab, selectedZoneIds, labelMap])
+  const subtitle = useMemo(
+    () => getSubtitleForTab(tab, activeMode, zoneName),
+    [tab, activeMode, zoneName],
+  )
 
   if (!isPieChartOpen) return null
 
@@ -381,24 +423,33 @@ export default function PieChartModal() {
 
         {/* Controls row */}
         <div className="flex items-center justify-between px-5 py-2.5 border-t border-gray-200">
-          {tab !== 'overview' ? (
-            <label className="flex items-center gap-2 text-xs text-gray-500">
-              הצג
-              <input
-                type="number"
-                min={3} max={20} value={topNInput}
-                onChange={e => setTopNInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                onBlur={() => {
-                  const n = Math.max(3, Math.min(20, parseInt(topNInput, 10) || 3))
-                  setTopN(n)
-                  setTopNInput(String(n))
-                }}
-                className="w-12 bg-white text-gray-700 text-xs rounded px-2 py-0.5 border border-gray-300 focus:outline-none focus:border-sky-500 text-center"
-              />
-              אזורים מובילים
-            </label>
-          ) : <div />}
+          <div className="flex items-center gap-3">
+            {tab !== 'overview' && (
+              <label className="flex items-center gap-2 text-xs text-gray-500">
+                הצג
+                <input
+                  type="number"
+                  min={3} max={20} value={topNInput}
+                  onChange={e => setTopNInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                  onBlur={() => {
+                    const n = Math.max(3, Math.min(20, parseInt(topNInput, 10) || 3))
+                    setTopN(n)
+                    setTopNInput(String(n))
+                  }}
+                  className="w-12 bg-white text-gray-700 text-xs rounded px-2 py-0.5 border border-gray-300 focus:outline-none focus:border-sky-500 text-center"
+                />
+                אזורים מובילים
+              </label>
+            )}
+            <button
+              onClick={() => exportPieChartData({ allTabsData, filterLine, selectedZoneNames, filters })}
+              disabled={pieData.length === 0}
+              className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              ייצוא ל-Excel
+            </button>
+          </div>
           <p className="text-xs text-gray-500">
             {'סה"כ: '}<span className="text-gray-700 font-medium">{Math.round(total).toLocaleString()}</span>{' נסיעות'}
           </p>
