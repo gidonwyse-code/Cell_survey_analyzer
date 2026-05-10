@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Sector, ResponsiveContainer } from 'recharts'
 import { useStore } from '../store/useStore'
 import { useOD } from '../hooks/useOD'
 import { useZones } from '../hooks/useZones'
@@ -133,8 +133,11 @@ export default function PieChartModal() {
 
   const [tab, setTab] = useState<TabId>(defaultTab)
   const [topN, setTopN] = useState(10)
+  const [topNInput, setTopNInput] = useState('10')
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   useEffect(() => { setTab(defaultTab) }, [defaultTab])
+  useEffect(() => { setActiveIndex(null) }, [tab, topN])
 
   useEffect(() => {
     if (!isPieChartOpen) return
@@ -159,6 +162,7 @@ export default function PieChartModal() {
   }, [tab, od, topN, labelMap, counterpartLabelMap, mapRole])
 
   const total = pieData.reduce((s, d) => s + d.trips, 0)
+  const activeSlice = activeIndex !== null ? (pieData[activeIndex] ?? null) : null
 
   // ── Pre-compute label y-positions with anti-overlap ───────────────────────
   // renderLabel is called once per slice without knowing neighbours, so we
@@ -217,7 +221,7 @@ export default function PieChartModal() {
       const pts = `${sx},${sy} ${bx},${adjBy} ${ex},${adjBy}`
 
       return (
-        <g>
+        <g pointerEvents="none">
           <text
             x={cx + midR * cos} y={cy + midR * sin}
             fill="white" textAnchor="middle" dominantBaseline="central"
@@ -244,7 +248,7 @@ export default function PieChartModal() {
   const dayLabel = DAY_LABEL[filters.day] ?? filters.day
   const timeLabel = (filters.hourMin === 0 && filters.hourMax === 24)
     ? 'סה"כ יומי'
-    : `${filters.hourMin}–${filters.hourMax}`
+    : `‪${filters.hourMin}–${filters.hourMax}‬`
   const filterLine = `${dayLabel} · ${timeLabel}`
 
   // ── Subtitle ──────────────────────────────────────────────────────────────
@@ -265,27 +269,15 @@ export default function PieChartModal() {
     if (activeMode === 3) {
       return tab === 'outgoing'
         ? `יעדים חיצוניים מ-${zoneName}`
-        : `מוצאים חיצוניות אל ${zoneName}`
+        : `מוצאים חיצוניים אל ${zoneName}`
     }
     if (tab === 'overview') return `פילוג לפי סוג נסיעה — ${zoneName}`
     if (tab === 'outgoing') return `יעדים חיצוניים מ-${zoneName}`
-    if (tab === 'incoming') return `מוצאים חיצוניות אל ${zoneName}`
+    if (tab === 'incoming') return `מוצאים חיצוניים אל ${zoneName}`
     return `פילוג נסיעות פנימיות — ${zoneName}`
   }, [activeMode, tab, selectedZoneIds, labelMap])
 
   if (!isPieChartOpen) return null
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null
-    const d: SliceData = payload[0].payload
-    const pct = total > 0 ? ((d.trips / total) * 100).toFixed(1) : '0'
-    return (
-      <div className="bg-white border border-gray-300 rounded px-3 py-2 text-xs text-gray-700 max-w-[220px] shadow" dir="rtl">
-        <p className="font-semibold truncate">{d.label}</p>
-        <p className="text-gray-500">{Math.round(d.trips).toLocaleString()} נסיעות · {pct}%</p>
-      </div>
-    )
-  }
 
   return (
     <div
@@ -335,26 +327,55 @@ export default function PieChartModal() {
               אין נתונים לתצוגה זו
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={52}
-                  outerRadius={78}
-                  paddingAngle={1}
-                  dataKey="trips"
-                  label={renderLabel}
-                  labelLine={false}
-                >
-                  {pieData.map((d, i) => (
-                    <Cell key={d.id} fill={sliceColor(d, i)} stroke="white" strokeWidth={1} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="relative" onMouseDown={e => { e.preventDefault(); (document.activeElement as HTMLElement)?.blur() }}>
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={52}
+                    outerRadius={78}
+                    paddingAngle={1}
+                    dataKey="trips"
+                    label={renderLabel}
+                    labelLine={false}
+                    isAnimationActive={false}
+                    activeShape={(props: any) => <Sector {...props} />}
+                    onMouseEnter={(_, index) => setActiveIndex(index)}
+                    onMouseLeave={() => setActiveIndex(null)}
+                  >
+                    {pieData.map((d, i) => (
+                      <Cell key={d.id} fill={sliceColor(d, i)} stroke="white" strokeWidth={1} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Center label */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-[88px] text-center flex flex-col items-center gap-0.5" dir="rtl">
+                  {activeSlice ? (
+                    <>
+                      <span className="text-[10px] text-gray-500 leading-tight w-full truncate">{activeSlice.label}</span>
+                      <span className="text-[14px] font-bold text-gray-900 leading-tight tabular-nums">
+                        {Math.round(activeSlice.trips).toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-gray-400 leading-tight">
+                        {total > 0 ? ((activeSlice.trips / total) * 100).toFixed(1) : '0'}%
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-[9px] text-gray-400 leading-tight">סה״כ</span>
+                      <span className="text-[14px] font-bold text-gray-900 leading-tight tabular-nums">
+                        {Math.round(total).toLocaleString()}
+                      </span>
+                      <span className="text-[9px] text-gray-400 leading-tight">נסיעות</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
@@ -365,8 +386,14 @@ export default function PieChartModal() {
               הצג
               <input
                 type="number"
-                min={3} max={20} value={topN}
-                onChange={e => setTopN(Math.max(3, Math.min(20, Number(e.target.value))))}
+                min={3} max={20} value={topNInput}
+                onChange={e => setTopNInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                onBlur={() => {
+                  const n = Math.max(3, Math.min(20, parseInt(topNInput, 10) || 3))
+                  setTopN(n)
+                  setTopNInput(String(n))
+                }}
                 className="w-12 bg-white text-gray-700 text-xs rounded px-2 py-0.5 border border-gray-300 focus:outline-none focus:border-sky-500 text-center"
               />
               אזורים מובילים
@@ -385,7 +412,7 @@ export default function PieChartModal() {
                 {pieData.map((d, i) => {
                   const pct = total > 0 ? ((d.trips / total) * 100).toFixed(1) : '0'
                   return (
-                    <tr key={d.id} className="border-t border-gray-100">
+                    <tr key={d.id} className={`border-t border-gray-100 transition-colors ${i === activeIndex ? 'bg-sky-50' : ''}`}>
                       <td className="py-1.5 pl-2 w-5">
                         <span
                           className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
