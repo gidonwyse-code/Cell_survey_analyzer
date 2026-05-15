@@ -38,13 +38,13 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set) => ({
-  mapLevel: 'TAZ_1270',
+  mapLevel: '',
   mapRole: 'origin',
-  counterpartLevel: 'TAZ_1270',
+  counterpartLevel: '',
   activeMode: 1,
   directionMode: 'both',
   selectedZoneIds: new Set(),
-  filters: { day: 'weekday', hourMin: 0, hourMax: 24, minTrips: 100, includeSelfLoops: false },
+  filters: { day: '', hourMin: 0, hourMax: 24, minTrips: 100, includeSelfLoops: false },
   hoveredZoneId: null,
   hoveredFlowId: null,
   activeBasemap: 'light',

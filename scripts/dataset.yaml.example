@@ -1,0 +1,78 @@
+# dataset.yaml.example
+# Copy to dataset.yaml, fill in your paths, and run:
+#   python scripts/ingest_generic.py --config dataset.yaml
+
+# ── Shapefile ────────────────────────────────────────────────────────────────
+shapefile:
+  path: "data/zones.shp"          # required: path to .shp file
+
+  encoding: "utf-8"               # optional: file encoding (default: utf-8)
+                                  # Use "iso-8859-8" for Hebrew shapefiles, etc.
+
+  base_zone_col: "ZONE_ID"        # required: finest-grain zone ID column
+                                  # This is the level OD data is measured at.
+                                  # All other levels are aggregations of this.
+
+  base_name: "Zone"               # optional: display name for the base level
+                                  # (default: same as base_zone_col)
+
+  aggregation_levels:             # optional list of coarser aggregation levels
+    - col: "DISTRICT"             # column name in the shapefile
+      name: "District"            # display name shown in the UI
+    - col: "REGION"
+      name: "Region"
+  # Levels are listed finest → coarsest for best map zoom behavior.
+  # The base zone always maps to the finest granularity (highest map zoom).
+  # Omit this block if you have no aggregation levels.
+
+  label_col: null                 # optional: shapefile column containing human-readable
+                                  # zone labels. Used only if zone_labels block is absent.
+
+# ── Zone Labels (optional) ───────────────────────────────────────────────────
+zone_labels:                      # omit this block entirely to use base_zone_col as labels
+  path: "data/labels.xlsx"        # xlsx or csv
+  join_col: "ZONE_ID"             # column to join on (matched to base_zone_col)
+  label_col: "zone_name"          # column containing human-readable zone names
+
+  level_labels:                   # optional: per-aggregation-level name sheets/columns
+    DISTRICT:                     # key must match a col in aggregation_levels
+      sheet: "districts"          # xlsx sheet name (omit for csv)
+      id_col: "id"                # column with the level ID
+      name_col: "NAME"            # column with the human-readable name
+    # REGION:
+    #   sheet: "regions"
+    #   id_col: "reg_id"
+    #   name_col: "NAME"
+
+# ── OD Files ─────────────────────────────────────────────────────────────────
+od_files:                         # list of OD CSV/Excel files with their day labels
+  - path: "data/weekday.csv"
+    day: "weekday"
+  - path: "data/saturday.csv"
+    day: "saturday"
+  # Add as many day types as you have. Day labels appear in the Day filter UI.
+
+# ── OD Column Mapping ────────────────────────────────────────────────────────
+od_columns:
+  from_zone: "FromZone"           # column name for origin zone ID (case-insensitive)
+  to_zone:   "ToZone"             # column name for destination zone ID (case-insensitive)
+
+  hours:
+    format: "wide_prefix"         # "wide_prefix" or "long"
+                                  #
+                                  # wide_prefix: one column per hour, named {prefix}{N}
+                                  #   e.g. h0, h1, ... h23 with prefix "h"
+                                  #   Automatically detects all matching columns.
+                                  #
+                                  # long: one row per (from, to, hour, trips)
+                                  #   Requires hour_col and trips_col below.
+
+    prefix: "h"                   # (wide_prefix only) column name prefix, e.g. "h" or "Hour"
+
+    # hour_col: "hour"            # (long format only) column with the hour value
+    # trips_col: "trips"          # (long format only) column with the trip count
+
+# ── Output ───────────────────────────────────────────────────────────────────
+output_dir: "output_data/"        # directory for parquet files + dataset_config.json
+                                  # Created automatically if it doesn't exist.
+                                  # Point DATA_DIR in backend to this directory.

@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import threading
@@ -17,14 +18,41 @@ logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
 
-LEVEL_FILES = {
-    "TAZ_1270": "zones.parquet",
-    "TAZ_250":  "zones_250.parquet",
-    "TAZ_33":   "zones_33.parquet",
-    "TAZ_15":   "zones_15.parquet",
-    "CITY":     "zones_city.parquet",
-}
-VALID_LEVELS = list(LEVEL_FILES.keys())
+# ── Dataset config ─────────────────────────────────────────────────────────
+# Loaded at startup from dataset_config.json (written by ingest_generic.py).
+# Falls back to the original hardcoded layout when the file is absent.
+
+_FALLBACK_LEVELS = [
+    {"id": "TAZ_1270", "name": "TAZ 1270", "file": "zones.parquet"},
+    {"id": "TAZ_250",  "name": "TAZ 250",  "file": "zones_250.parquet"},
+    {"id": "TAZ_33",   "name": "TAZ 33",   "file": "zones_33.parquet"},
+    {"id": "TAZ_15",   "name": "TAZ 15",   "file": "zones_15.parquet"},
+    {"id": "CITY",     "name": "City",     "file": "zones_city.parquet"},
+]
+_FALLBACK_DAYS = ["weekday", "friday", "saturday"]
+_FALLBACK_BBOX = [34.2, 29.5, 35.9, 33.3]
+
+def _load_dataset_config() -> tuple[str, list[dict], list[str], list[float]]:
+    cfg_path = DATA_DIR / "dataset_config.json"
+    if not cfg_path.exists():
+        logger.info("dataset_config.json not found — using fallback hardcoded config")
+        base = _FALLBACK_LEVELS[0]["id"]
+        return base, _FALLBACK_LEVELS, _FALLBACK_DAYS, _FALLBACK_BBOX
+    with open(cfg_path, encoding="utf-8") as f:
+        cfg = json.load(f)
+    base = cfg["base_level"]
+    levels = cfg["levels"]
+    days = cfg.get("days", _FALLBACK_DAYS)
+    bbox = cfg.get("bbox", _FALLBACK_BBOX)
+    logger.info(f"Loaded dataset_config.json: base={base}, levels={[l['id'] for l in levels]}, days={days}")
+    return base, levels, days, bbox
+
+BASE_LEVEL: str = ""
+LEVEL_META: list[dict] = []   # list of {id, name, file}
+LEVEL_FILES: dict[str, str] = {}
+VALID_LEVELS: list[str] = []
+VALID_DAYS: list[str] = []
+DATASET_BBOX: list[float] = []
 
 zones_gdf: dict = {}
 zones_geojson_cache: dict = {}
@@ -35,6 +63,11 @@ _duckdb_lock = threading.Lock()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global zones_gdf, zones_geojson_cache, con
+    global BASE_LEVEL, LEVEL_META, LEVEL_FILES, VALID_LEVELS, VALID_DAYS, DATASET_BBOX
+
+    BASE_LEVEL, LEVEL_META, VALID_DAYS, DATASET_BBOX = _load_dataset_config()
+    LEVEL_FILES = {lv["id"]: lv["file"] for lv in LEVEL_META}
+    VALID_LEVELS = [lv["id"] for lv in LEVEL_META]
 
     logger.info(f"Loading zone parquets from {DATA_DIR} ...")
     for level, filename in LEVEL_FILES.items():
@@ -42,19 +75,17 @@ async def lifespan(app: FastAPI):
         gdf = gpd.read_parquet(path)
         zones_gdf[level] = gdf
 
-        # Pre-build GeoJSON with normalized id/label properties
         export = gdf.copy()
-        if level == "TAZ_1270":
-            export = export.rename(columns={"TAZ_1270": "id", "zone_name": "label"})
+        if level == BASE_LEVEL:
+            export = export.rename(columns={BASE_LEVEL: "id", "zone_name": "label"})
         else:
             export = export.rename(columns={"group_id": "id"})
 
         keep = ["id", "label", "centroid_lat", "centroid_lon", "geometry"]
         export = export[[c for c in keep if c in export.columns]]
-        zones_geojson_cache[level] = export.to_json()  # store raw string — never re-parse/re-serialize
+        zones_geojson_cache[level] = export.to_json()
         logger.info(f"  {level}: {len(gdf)} features")
 
-    # Register od_matrix.parquet with DuckDB — never load into Pandas
     od_path = (DATA_DIR / "od_matrix.parquet").as_posix()
     con = duckdb.connect(":memory:")
     con.execute(f"CREATE VIEW od_matrix AS SELECT * FROM read_parquet('{od_path}')")
@@ -76,7 +107,9 @@ app.add_middleware(
 
 
 @app.get("/api/zones")
-def get_zones(level: str = "TAZ_1270"):
+def get_zones(level: str = Query(default=None)):
+    if level is None:
+        level = BASE_LEVEL
     if level not in VALID_LEVELS:
         raise HTTPException(400, f"Invalid level '{level}'. Valid: {VALID_LEVELS}")
     t0 = time.time()
@@ -88,30 +121,33 @@ def get_zones(level: str = "TAZ_1270"):
 @app.get("/api/od/metadata")
 def get_metadata():
     max_trips = con.execute("SELECT MAX(trips) FROM od_matrix").fetchone()[0]
+    days = con.execute("SELECT DISTINCT day FROM od_matrix ORDER BY day").df()["day"].tolist()
     return {
-        "days": ["weekday", "friday", "saturday"],
+        "days": days,
         "hours": {"min": 0, "max": 23},
         "trips": {"min": 1, "max": float(max_trips)},
-        "levels": VALID_LEVELS,
+        "levels": [{"id": lv["id"], "name": lv["name"]} for lv in LEVEL_META],
+        "bbox": DATASET_BBOX,
     }
 
 
 def _build_lookup(base_gdf, level: str):
-    if level == "TAZ_1270":
-        lk = base_gdf[["TAZ_1270"]].copy()
-        lk.columns = ["taz_1270"]
-        lk["group_id"] = lk["taz_1270"]
+    base_col = BASE_LEVEL
+    if level == base_col:
+        lk = base_gdf[[base_col]].copy()
+        lk.columns = ["taz_base"]
+        lk["group_id"] = lk["taz_base"]
     else:
-        lk = base_gdf[["TAZ_1270", level]].copy()
-        lk.columns = ["taz_1270", "group_id"]
-    lk["taz_1270"] = lk["taz_1270"].astype(str)
+        lk = base_gdf[[base_col, level]].copy()
+        lk.columns = ["taz_base", "group_id"]
+    lk["taz_base"] = lk["taz_base"].astype(str)
     lk["group_id"] = lk["group_id"].astype(str)
     return lk
 
 
 @app.get("/api/od")
 def get_od(
-    level:        Optional[str] = Query(None),   # backward-compat alias
+    level:        Optional[str] = Query(None),
     origin_level: Optional[str] = Query(None),
     dest_level:   Optional[str] = Query(None),
     day: Optional[str] = None,
@@ -134,16 +170,13 @@ def get_od(
         raise HTTPException(400, f"Invalid origin_level '{eff_orig}'")
     if eff_dest not in VALID_LEVELS:
         raise HTTPException(400, f"Invalid dest_level '{eff_dest}'")
-    if day and day not in ("weekday", "friday", "saturday"):
+    if day and VALID_DAYS and day not in VALID_DAYS:
         raise HTTPException(400, f"Invalid day '{day}'")
 
-    base_gdf = zones_gdf["TAZ_1270"]
+    base_gdf = zones_gdf[BASE_LEVEL]
     orig_lookup = _build_lookup(base_gdf, eff_orig)
     dest_lookup = _build_lookup(base_gdf, eff_dest)
 
-    # Build internal-pairs lookup for cross-level hierarchical self-loop filtering.
-    # A flow (A, B) is "hierarchically internal" when A contains B or B contains A
-    # in the zone hierarchy — i.e. they share any TAZ_1270 row in zones.parquet.
     internal_pairs_df = None
     if not include_self_loops and eff_orig != eff_dest:
         ip = base_gdf[[eff_orig, eff_dest]].drop_duplicates().copy()
@@ -162,7 +195,7 @@ def get_od(
         if eff_orig == eff_dest:
             conditions.append("orig.group_id != dest.group_id")
         else:
-            conditions.append("ip.orig_gid IS NULL")  # anti-join: not in internal_pairs
+            conditions.append("ip.orig_gid IS NULL")
 
     def parse_ids(s: Optional[str]) -> list[str]:
         if not s:
@@ -200,8 +233,8 @@ def get_od(
             dest.group_id  AS dest_id,
             SUM(od.trips)  AS trips
         FROM od_matrix od
-        JOIN orig_lookup orig ON od.from_zone = orig.taz_1270
-        JOIN dest_lookup dest ON od.to_zone   = dest.taz_1270
+        JOIN orig_lookup orig ON od.from_zone = orig.taz_base
+        JOIN dest_lookup dest ON od.to_zone   = dest.taz_base
         {join_extra}
         WHERE {where_clause}
         GROUP BY orig.group_id, dest.group_id

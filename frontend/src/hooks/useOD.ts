@@ -55,7 +55,7 @@ export function useOD(
   filters: Filters,
 ): ODResult {
   const ids = [...selectedZoneIds]
-  const enabled = ids.length > 0
+  const enabled = ids.length > 0 && !!mapLevel && !!counterpartLevel
 
   // Build query specs for each mode
   const queries: Array<{ url: string; tag: 'outgoing' | 'incoming' | 'internal' }> = []

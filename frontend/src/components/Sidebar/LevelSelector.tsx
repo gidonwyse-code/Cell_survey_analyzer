@@ -1,22 +1,30 @@
+import { useEffect } from 'react'
 import { useStore } from '../../store/useStore'
-import type { Level } from '../../types'
+import { useMetadata } from '../../hooks/useMetadata'
+import type { LevelMeta } from '../../types'
 
-const LEVELS: Level[] = ['TAZ_1270', 'TAZ_250', 'TAZ_33', 'TAZ_15', 'CITY']
-
-function LevelButtons({ active, onChange }: { active: Level; onChange: (l: Level) => void }) {
+function LevelButtons({
+  levels,
+  active,
+  onChange,
+}: {
+  levels: LevelMeta[]
+  active: string
+  onChange: (id: string) => void
+}) {
   return (
     <div className="flex flex-wrap gap-1">
-      {LEVELS.map((l) => (
+      {levels.map((lv) => (
         <button
-          key={l}
-          onClick={() => onChange(l)}
+          key={lv.id}
+          onClick={() => onChange(lv.id)}
           className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-            active === l
+            active === lv.id
               ? 'bg-sky-500 text-white'
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          {l}
+          {lv.name}
         </button>
       ))}
     </div>
@@ -25,12 +33,21 @@ function LevelButtons({ active, onChange }: { active: Level; onChange: (l: Level
 
 export default function LevelSelector() {
   const { mapLevel, mapRole, counterpartLevel, setMapLevel, setMapRole, setCounterpartLevel } = useStore()
+  const { data: metadata } = useMetadata()
+  const levels = metadata?.levels ?? []
+
+  // Initialize to first level when metadata loads and no level is set yet
+  useEffect(() => {
+    if (!mapLevel && levels.length > 0) {
+      setMapLevel(levels[0].id)
+    }
+  }, [mapLevel, levels, setMapLevel])
 
   return (
     <div className="space-y-2">
       <div>
         <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Map Level</div>
-        <LevelButtons active={mapLevel} onChange={setMapLevel} />
+        <LevelButtons levels={levels} active={mapLevel} onChange={setMapLevel} />
       </div>
 
       <div>
@@ -54,7 +71,7 @@ export default function LevelSelector() {
 
       <div>
         <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Counterpart Level</div>
-        <LevelButtons active={counterpartLevel} onChange={setCounterpartLevel} />
+        <LevelButtons levels={levels} active={counterpartLevel} onChange={setCounterpartLevel} />
       </div>
     </div>
   )

@@ -20,5 +20,6 @@ export function useZones(level: Level) {
     queryKey: ['zones', level],
     queryFn: () => fetch(`/api/zones?level=${level}`).then((r) => r.json()),
     staleTime: Infinity,
+    enabled: !!level,
   })
 }

@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-
-maplibregl.setRTLTextPlugin(
-  'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js',
-  true,
-)
 import { useStore } from '../../store/useStore'
 import { useZones } from '../../hooks/useZones'
 import { useOD } from '../../hooks/useOD'
+import { useMetadata } from '../../hooks/useMetadata'
 import type { ODRow } from '../../types'
 import { addArrowImages } from './arrowIcon'
 
@@ -125,6 +121,8 @@ export default function MapView() {
     showFlowLabels, roundFlowLabels, flowGradient, showArrows,
     toggleZone,
   } = useStore()
+  const { data: metadata } = useMetadata()
+  const metaLevels = metadata?.levels ?? []
 
   const { data: zonesData } = useZones(mapLevel)
   const { data: counterpartZonesData } = useZones(counterpartLevel)
@@ -163,8 +161,8 @@ export default function MapView() {
         },
         layers: [{ id: 'basemap', type: 'raster', source: 'basemap-source' }],
       },
-      center: [34.85, 31.5],
-      zoom: 7,
+      center: [0, 20],
+      zoom: 2,
       boxZoom: false,
     })
 
@@ -325,7 +323,7 @@ export default function MapView() {
           if (!e.features?.length) return
           map.getCanvas().style.cursor = 'crosshair'
           const p = e.features[0].properties
-          const html = `<span dir="rtl" style="font-size:12px;display:block"><b>${p.orig_label}</b> ← <b>${p.dest_label}</b><br/>${Math.round(p.trips).toLocaleString()} נסיעות</span>`
+          const html = `<span style="font-size:12px;display:block"><b>${p.orig_label}</b> → <b>${p.dest_label}</b><br/>${Math.round(p.trips).toLocaleString()} trips</span>`
           if (tooltipRef.current) {
             tooltipRef.current.setLngLat(e.lngLat).setHTML(html)
           } else {
@@ -412,9 +410,10 @@ export default function MapView() {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    const minzoom = mapLevel === 'TAZ_1270' ? 10 : mapLevel === 'TAZ_250' ? 8 : 6
+    const idx = metaLevels.findIndex((lv) => lv.id === mapLevel)
+    const minzoom = idx === 0 ? 10 : idx === 1 ? 8 : 6
     map.setLayerZoomRange('zones-labels', minzoom, 24)
-  }, [mapReady, mapLevel])
+  }, [mapReady, mapLevel, metaLevels])
 
   // ── Update flow lines ────────────────────────────────────────────────────
   useEffect(() => {

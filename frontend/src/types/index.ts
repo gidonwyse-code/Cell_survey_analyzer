@@ -1,8 +1,13 @@
-export type Level = 'TAZ_1270' | 'TAZ_250' | 'TAZ_33' | 'TAZ_15' | 'CITY'
+export type Level = string
 export type Mode = 1 | 2 | 3 | 4
 export type Direction = 'outgoing' | 'incoming' | 'both'
 export type Basemap = 'dark' | 'light' | 'osm'
-export type Day = 'weekday' | 'friday' | 'saturday'
+export type Day = string
+
+export interface LevelMeta {
+  id: string
+  name: string
+}
 
 export interface Filters {
   day: Day
@@ -34,5 +39,6 @@ export interface Metadata {
   days: string[]
   hours: { min: number; max: number }
   trips: { min: number; max: number }
-  levels: Level[]
+  levels: LevelMeta[]
+  bbox: [number, number, number, number]
 }

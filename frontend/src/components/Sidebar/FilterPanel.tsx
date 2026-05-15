@@ -1,20 +1,28 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../../store/useStore'
-import type { Day } from '../../types'
+import { useMetadata } from '../../hooks/useMetadata'
 
-const DAYS: Array<{ value: Day; label: string }> = [
-  { value: 'weekday',  label: 'Weekday' },
-  { value: 'friday',   label: 'Friday' },
-  { value: 'saturday', label: 'Saturday' },
-]
+function capitalize(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
 
 export default function FilterPanel() {
   const { filters, setFilters, showFlowLabels, setShowFlowLabels, roundFlowLabels, setRoundFlowLabels, flowGradient, setFlowGradient, showArrows, setShowArrows } = useStore()
+  const { data: metadata } = useMetadata()
+  const days = metadata?.days ?? []
+
   const [local, setLocal] = useState(filters)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sync if external state changes (e.g., level change resets)
   useEffect(() => { setLocal(filters) }, [filters])
+
+  // Initialize day from metadata when none is set
+  useEffect(() => {
+    if (!local.day && days.length > 0) {
+      apply({ day: days[0] })
+    }
+  }, [local.day, days]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function apply(patch: Partial<typeof filters>) {
     const updated = { ...local, ...patch }
@@ -31,17 +39,17 @@ export default function FilterPanel() {
       <div>
         <div className="text-xs text-gray-500 mb-1">Day</div>
         <div className="flex flex-wrap gap-1">
-          {DAYS.map((d) => (
+          {days.map((d) => (
             <button
-              key={String(d.value)}
-              onClick={() => apply({ day: d.value })}
+              key={d}
+              onClick={() => apply({ day: d })}
               className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                local.day === d.value
+                local.day === d
                   ? 'bg-sky-500 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
-              {d.label}
+              {capitalize(d)}
             </button>
           ))}
         </div>

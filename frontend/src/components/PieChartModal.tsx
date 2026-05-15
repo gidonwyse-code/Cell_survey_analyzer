@@ -51,7 +51,7 @@ function aggregate(
   if (rest.length > 0) {
     result.push({
       id: 'others',
-      label: `אחרים (${rest.length} אזורים)`,
+      label: `Others (${rest.length} zones)`,
       trips: rest.reduce((s, [, t]) => s + t, 0),
     })
   }
@@ -71,14 +71,14 @@ interface ODResult {
 }
 
 function getSubtitleForTab(tabId: TabId, activeMode: number, zoneName: string): string {
-  if (activeMode === 1) return tabId === 'outgoing' ? `יעדים מ-${zoneName}` : `מוצאים אל ${zoneName}`
-  if (activeMode === 2) return tabId === 'origin' ? `אילו אזורים מייצרים נסיעות פנימיות — ${zoneName}` : `אילו אזורים מושכים נסיעות פנימיות — ${zoneName}`
-  if (activeMode === 3) return tabId === 'outgoing' ? `יעדים חיצוניים מ-${zoneName}` : `מוצאים חיצוניים אל ${zoneName}`
-  if (tabId === 'overview')         return `פילוג לפי סוג נסיעה — ${zoneName}`
-  if (tabId === 'outgoing')         return `יעדים חיצוניים מ-${zoneName}`
-  if (tabId === 'incoming')         return `מוצאים חיצוניים אל ${zoneName}`
-  if (tabId === 'internal_origins') return `נסיעות פנימיות לפי אזור מוצא — ${zoneName}`
-  if (tabId === 'internal_dests')   return `נסיעות פנימיות לפי אזור יעד — ${zoneName}`
+  if (activeMode === 1) return tabId === 'outgoing' ? `Destinations from ${zoneName}` : `Origins to ${zoneName}`
+  if (activeMode === 2) return tabId === 'origin' ? `Which zones generate internal trips — ${zoneName}` : `Which zones attract internal trips — ${zoneName}`
+  if (activeMode === 3) return tabId === 'outgoing' ? `External destinations from ${zoneName}` : `External origins to ${zoneName}`
+  if (tabId === 'overview')         return `Trip distribution by type — ${zoneName}`
+  if (tabId === 'outgoing')         return `External destinations from ${zoneName}`
+  if (tabId === 'incoming')         return `External origins to ${zoneName}`
+  if (tabId === 'internal_origins') return `Internal trips by origin — ${zoneName}`
+  if (tabId === 'internal_dests')   return `Internal trips by destination — ${zoneName}`
   return ''
 }
 
@@ -92,16 +92,16 @@ function getSlicesForTab(
 ): SliceData[] {
   if (tabId === 'overview') {
     const slices: SliceData[] = [
-      { id: 'outgoing', label: 'יוצא', trips: od.outgoing.reduce((s, r) => s + r.trips, 0), fixedColor: '#FC8181' },
-      { id: 'incoming', label: 'נכנס', trips: od.incoming.reduce((s, r) => s + r.trips, 0), fixedColor: '#6EE7B7' },
+      { id: 'outgoing', label: 'Outgoing', trips: od.outgoing.reduce((s, r) => s + r.trips, 0), fixedColor: '#FC8181' },
+      { id: 'incoming', label: 'Incoming', trips: od.incoming.reduce((s, r) => s + r.trips, 0), fixedColor: '#6EE7B7' },
     ]
     if (includeSelfLoops) {
       const interZone = od.internal.filter(r => r.origin_id !== r.dest_id).reduce((s, r) => s + r.trips, 0)
       const intraZone = od.internal.filter(r => r.origin_id === r.dest_id).reduce((s, r) => s + r.trips, 0)
-      slices.push({ id: 'inter_selected', label: 'בין אזורים נבחרים', trips: interZone, fixedColor: '#FB923C' })
-      slices.push({ id: 'intra_zone',     label: 'פנים אזורי',         trips: intraZone, fixedColor: '#FBBF24' })
+      slices.push({ id: 'inter_selected', label: 'Between selected zones', trips: interZone, fixedColor: '#FB923C' })
+      slices.push({ id: 'intra_zone',     label: 'Self-loop',             trips: intraZone, fixedColor: '#FBBF24' })
     } else {
-      slices.push({ id: 'internal', label: 'פנימי', trips: od.internal.reduce((s, r) => s + r.trips, 0), fixedColor: '#FB923C' })
+      slices.push({ id: 'internal', label: 'Internal', trips: od.internal.reduce((s, r) => s + r.trips, 0), fixedColor: '#FB923C' })
     }
     return slices.filter(d => d.trips > 0)
   }
@@ -115,7 +115,7 @@ function getSlicesForTab(
 }
 
 const RADIAN = Math.PI / 180
-const RADIAL_EXT = 14  // px beyond pie edge for the elbow bend
+const RADIAL_EXT = 14
 
 export default function PieChartModal() {
   const {
@@ -129,7 +129,6 @@ export default function PieChartModal() {
   const { data: zonesData } = useZones(mapLevel)
   const { data: counterpartZonesData } = useZones(counterpartLevel)
 
-  // labelMap for map-level zones (selected zones, and origin side when mapRole='origin')
   const labelMap = useMemo(() => {
     const m = new Map<string, string>()
     for (const f of zonesData?.features ?? []) {
@@ -138,7 +137,6 @@ export default function PieChartModal() {
     return m
   }, [zonesData])
 
-  // counterpartLabelMap for the other side
   const counterpartLabelMap = useMemo(() => {
     const m = new Map<string, string>()
     for (const f of counterpartZonesData?.features ?? []) {
@@ -147,27 +145,26 @@ export default function PieChartModal() {
     return m
   }, [counterpartZonesData])
 
-  // Resolve which label map corresponds to origins and destinations
   const origLabelMap = counterpartLabelMap
   const destLabelMap = mapRole === 'origin' ? counterpartLabelMap : labelMap
 
   // ── Tabs ─────────────────────────────────────────────────────────────────
   const tabs = useMemo((): Array<{ id: TabId; label: string }> => {
     if (activeMode === 4) return [
-      { id: 'overview',         label: 'סקירה' },
-      { id: 'outgoing',         label: 'יוצא' },
-      { id: 'incoming',         label: 'נכנס' },
-      { id: 'internal_origins', label: 'פנימי-מוצאים' },
-      { id: 'internal_dests',   label: 'פנימי-יעדים' },
+      { id: 'overview',         label: 'Overview' },
+      { id: 'outgoing',         label: 'Outgoing' },
+      { id: 'incoming',         label: 'Incoming' },
+      { id: 'internal_origins', label: 'Internal-origins' },
+      { id: 'internal_dests',   label: 'Internal-destinations' },
     ]
     if (activeMode === 2) return [
-      { id: 'origin', label: 'לפי מוצא' },
-      { id: 'dest',   label: 'לפי יעד' },
+      { id: 'origin', label: 'By origin' },
+      { id: 'dest',   label: 'By destination' },
     ]
-    if (mapRole === 'destination') return []  // single incoming query, no tabs needed
+    if (mapRole === 'destination') return []
     if (directionMode === 'both') return [
-      { id: 'outgoing', label: 'יוצא' },
-      { id: 'incoming', label: 'נכנס' },
+      { id: 'outgoing', label: 'Outgoing' },
+      { id: 'incoming', label: 'Incoming' },
     ]
     return []
   }, [activeMode, directionMode, mapRole])
@@ -203,7 +200,7 @@ export default function PieChartModal() {
 
   const zoneName = useMemo(() => {
     const ids = [...selectedZoneIds]
-    if (ids.length === 1) return labelMap.get(ids[0]) ?? 'האזור הנבחר'
+    if (ids.length === 1) return labelMap.get(ids[0]) ?? 'Selected zone'
     return buildZoneList(ids, labelMap, 120)
   }, [selectedZoneIds, labelMap])
 
@@ -227,12 +224,10 @@ export default function PieChartModal() {
   const activeSlice = activeIndex !== null ? (pieData[activeIndex] ?? null) : null
 
   // ── Pre-compute label y-positions with anti-overlap ───────────────────────
-  // renderLabel is called once per slice without knowing neighbours, so we
-  // pre-compute all positions here and close over them in the callback.
   const labelPositions = useMemo(() => {
     if (!total) return new Map<number, number>()
-    const MIN_GAP = 13     // minimum vertical gap (px) between adjacent baselines
-    const outerRadius = 78 // must match <Pie outerRadius>
+    const MIN_GAP = 13
+    const outerRadius = 78
     const leftEntries:  Array<{ index: number; rawByRel: number }> = []
     const rightEntries: Array<{ index: number; rawByRel: number }> = []
     let accAngle = 0
@@ -279,7 +274,6 @@ export default function PieChartModal() {
       const anchor = isRight ? 'end' : 'start'
       const tx     = ex + (isRight ? 3 : -3)
 
-      // Elbow line: diagonal radial segment to adjusted y → horizontal arm
       const pts = `${sx},${sy} ${bx},${adjBy} ${ex},${adjBy}`
 
       return (
@@ -302,15 +296,12 @@ export default function PieChartModal() {
   )
 
   // ── Filter description line ───────────────────────────────────────────────
-  const DAY_LABEL: Record<string, string> = {
-    weekday:  'יום חול',
-    friday:   'יום שישי',
-    saturday: 'יום שבת',
-  }
-  const dayLabel = DAY_LABEL[filters.day] ?? filters.day
+  const dayLabel = filters.day
+    ? filters.day.charAt(0).toUpperCase() + filters.day.slice(1)
+    : 'All days'
   const timeLabel = (filters.hourMin === 0 && filters.hourMax === 24)
-    ? 'סה"כ יומי'
-    : `‪${filters.hourMin}–${filters.hourMax}‬`
+    ? 'All day'
+    : `h${filters.hourMin}–h${filters.hourMax}`
   const filterLine = `${dayLabel} · ${timeLabel}`
 
   // ── Subtitle ──────────────────────────────────────────────────────────────
@@ -327,14 +318,13 @@ export default function PieChartModal() {
       onClick={() => setPieChartOpen(false)}
     >
       <div
-        dir="rtl"
         className="bg-white border border-gray-200 rounded-xl w-[560px] max-h-[90vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-5 pt-4 pb-3 border-b border-gray-200">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900">פילוג נסיעות</h2>
+            <h2 className="text-sm font-semibold text-gray-900">Trip distribution</h2>
             <p className="text-xs text-gray-600 mt-0.5">{filterLine}</p>
             <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
           </div>
@@ -366,7 +356,7 @@ export default function PieChartModal() {
         <div className="px-5 pt-4">
           {pieData.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-              אין נתונים לתצוגה זו
+              No data for this view
             </div>
           ) : (
             <div className="relative" onMouseDown={e => { e.preventDefault(); (document.activeElement as HTMLElement)?.blur() }}>
@@ -395,7 +385,7 @@ export default function PieChartModal() {
               </ResponsiveContainer>
               {/* Center label */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-[88px] text-center flex flex-col items-center gap-0.5" dir="rtl">
+                <div className="w-[88px] text-center flex flex-col items-center gap-0.5">
                   {activeSlice ? (
                     <>
                       <span className="text-[10px] text-gray-500 leading-tight w-full truncate">{activeSlice.label}</span>
@@ -408,11 +398,11 @@ export default function PieChartModal() {
                     </>
                   ) : (
                     <>
-                      <span className="text-[9px] text-gray-400 leading-tight">סה״כ</span>
+                      <span className="text-[9px] text-gray-400 leading-tight">Total</span>
                       <span className="text-[14px] font-bold text-gray-900 leading-tight tabular-nums">
                         {Math.round(total).toLocaleString()}
                       </span>
-                      <span className="text-[9px] text-gray-400 leading-tight">נסיעות</span>
+                      <span className="text-[9px] text-gray-400 leading-tight">trips</span>
                     </>
                   )}
                 </div>
@@ -426,7 +416,7 @@ export default function PieChartModal() {
           <div className="flex items-center gap-3">
             {tab !== 'overview' && (
               <label className="flex items-center gap-2 text-xs text-gray-500">
-                הצג
+                Show
                 <input
                   type="number"
                   min={3} max={20} value={topNInput}
@@ -439,7 +429,7 @@ export default function PieChartModal() {
                   }}
                   className="w-12 bg-white text-gray-700 text-xs rounded px-2 py-0.5 border border-gray-300 focus:outline-none focus:border-sky-500 text-center"
                 />
-                אזורים מובילים
+                top zones
               </label>
             )}
             <button
@@ -447,11 +437,11 @@ export default function PieChartModal() {
               disabled={pieData.length === 0}
               className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              ייצוא ל-Excel
+              Export to Excel
             </button>
           </div>
           <p className="text-xs text-gray-500">
-            {'סה"כ: '}<span className="text-gray-700 font-medium">{Math.round(total).toLocaleString()}</span>{' נסיעות'}
+            {'Total: '}<span className="text-gray-700 font-medium">{Math.round(total).toLocaleString()}</span>{' trips'}
           </p>
         </div>
 

@@ -8,10 +8,8 @@ interface SliceData {
   fixedColor?: string
 }
 
-const DAY_LABEL: Record<string, string> = {
-  weekday:  'יום חול',
-  friday:   'יום שישי',
-  saturday: 'יום שבת',
+function capitalizeDay(day: string): string {
+  return day ? day.charAt(0).toUpperCase() + day.slice(1) : day
 }
 
 export function buildZoneList(ids: string[], labelMap: Map<string, string>, maxChars?: number): string {
@@ -21,7 +19,7 @@ export function buildZoneList(ids: string[], labelMap: Map<string, string>, maxC
   const shown: string[] = []
   for (const name of names) {
     const remaining = names.length - shown.length - 1
-    const suffix = remaining > 0 ? `, ועוד ${remaining} אזורים` : ''
+    const suffix = remaining > 0 ? `, and ${remaining} more zones` : ''
     const candidate = shown.length > 0
       ? `${shown.join(', ')}, ${name}${suffix}`
       : `${name}${suffix}`
@@ -33,26 +31,26 @@ export function buildZoneList(ids: string[], labelMap: Map<string, string>, maxC
   }
   const remaining = names.length - shown.length
   if (remaining === 0) return shown.join(', ')
-  if (shown.length === 0) return `ועוד ${remaining} אזורים`
-  return `${shown.join(', ')}, ועוד ${remaining} אזורים`
+  if (shown.length === 0) return `and ${remaining} more zones`
+  return `${shown.join(', ')}, and ${remaining} more zones`
 }
 
 function zoneRows(selectedZoneNames: string[]): string[][] {
-  return selectedZoneNames.map((name, i) => [i === 0 ? 'אזורים נבחרים' : '', name])
+  return selectedZoneNames.map((name, i) => [i === 0 ? 'Selected zones' : '', name])
 }
 
 function filterSummaryRows(filters: Filters, extra: Record<string, string | number> = {}) {
   return [
-    ['יום', DAY_LABEL[filters.day] ?? filters.day],
-    ['שעות', `${filters.hourMin}–${filters.hourMax}`],
-    ['מינימום נסיעות', filters.minTrips],
-    ['כולל נסיעות פנים-אזוריות', filters.includeSelfLoops ? 'כן' : 'לא'],
+    ['Day', capitalizeDay(filters.day)],
+    ['Hours', `${filters.hourMin}–${filters.hourMax}`],
+    ['Min trips', filters.minTrips],
+    ['Include self-loops', filters.includeSelfLoops ? 'Yes' : 'No'],
     ...Object.entries(extra).map(([k, v]) => [k, v]),
   ]
 }
 
 function internalType(r: ODRow): string {
-  return r.origin_id === r.dest_id ? 'פנים אזורי' : 'בין אזורים נבחרים'
+  return r.origin_id === r.dest_id ? 'Self-loop' : 'Internal'
 }
 
 export function exportODFlows(params: {
@@ -69,32 +67,31 @@ export function exportODFlows(params: {
 
   const resolve = (id: string) => labelMap.get(id) ?? id
 
-  type FlowRow = { 'מזהה מוצא': string; 'שם מוצא': string; 'מזהה יעד': string; 'שם יעד': string; 'נסיעות': number; 'סוג': string }
+  type FlowRow = { 'Origin ID': string; 'Origin name': string; 'Dest ID': string; 'Dest name': string; 'Trips': number; 'Type': string }
   const rows: FlowRow[] = [
-    ...outgoing.map(r => ({ 'מזהה מוצא': r.origin_id, 'שם מוצא': resolve(r.origin_id), 'מזהה יעד': r.dest_id, 'שם יעד': resolve(r.dest_id), 'נסיעות': Math.round(r.trips), 'סוג': 'יוצא' })),
-    ...incoming.map(r => ({ 'מזהה מוצא': r.origin_id, 'שם מוצא': resolve(r.origin_id), 'מזהה יעד': r.dest_id, 'שם יעד': resolve(r.dest_id), 'נסיעות': Math.round(r.trips), 'סוג': 'נכנס' })),
-    ...internal.map(r => ({ 'מזהה מוצא': r.origin_id, 'שם מוצא': resolve(r.origin_id), 'מזהה יעד': r.dest_id, 'שם יעד': resolve(r.dest_id), 'נסיעות': Math.round(r.trips), 'סוג': internalType(r) })),
-  ].sort((a, b) => b['נסיעות'] - a['נסיעות'])
+    ...outgoing.map(r => ({ 'Origin ID': r.origin_id, 'Origin name': resolve(r.origin_id), 'Dest ID': r.dest_id, 'Dest name': resolve(r.dest_id), 'Trips': Math.round(r.trips), 'Type': 'Outgoing' })),
+    ...incoming.map(r => ({ 'Origin ID': r.origin_id, 'Origin name': resolve(r.origin_id), 'Dest ID': r.dest_id, 'Dest name': resolve(r.dest_id), 'Trips': Math.round(r.trips), 'Type': 'Incoming' })),
+    ...internal.map(r => ({ 'Origin ID': r.origin_id, 'Origin name': resolve(r.origin_id), 'Dest ID': r.dest_id, 'Dest name': resolve(r.dest_id), 'Trips': Math.round(r.trips), 'Type': internalType(r) })),
+  ].sort((a, b) => b['Trips'] - a['Trips'])
 
-  const totalTrips = rows.reduce((s, r) => s + r['נסיעות'], 0)
+  const totalTrips = rows.reduce((s, r) => s + r['Trips'], 0)
 
   const wb = XLSX.utils.book_new()
-  wb.Workbook = { Views: [{ RTL: true }] }
 
   const wsFlows = XLSX.utils.json_to_sheet(rows)
-  XLSX.utils.book_append_sheet(wb, wsFlows, 'נסיעות')
+  XLSX.utils.book_append_sheet(wb, wsFlows, 'Flows')
 
   const summaryData = [
     ...filterSummaryRows(filters, {
-      'רמת אגרגציה': level,
-      'סה"כ זרימות': rows.length,
-      'סה"כ נסיעות': totalTrips,
-      ...(truncated ? { 'אזהרה': 'הנתונים גדולים מ-5,000 שורות — מוצגות 5,000 הגדולות בלבד' } : {}),
+      'Aggregation level': level,
+      'Total flows': rows.length,
+      'Total trips': totalTrips,
+      ...(truncated ? { 'Warning': 'Result exceeded 5,000 rows — showing top 5,000 only' } : {}),
     }),
     ...zoneRows(selectedZoneNames),
   ]
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
-  XLSX.utils.book_append_sheet(wb, wsSummary, 'סיכום')
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
 
   const filename = `od_flows_${level}_${filters.day}_${filters.hourMin}-${filters.hourMax}.xlsx`
   XLSX.writeFile(wb, filename)
@@ -109,7 +106,6 @@ export function exportPieChartData(params: {
   const { allTabsData, filterLine, selectedZoneNames, filters } = params
 
   const wb = XLSX.utils.book_new()
-  wb.Workbook = { Views: [{ RTL: true }] }
 
   for (const { tabLabel, slices, subtitle } of allTabsData) {
     if (slices.length === 0) continue
@@ -125,17 +121,17 @@ export function exportPieChartData(params: {
     const aoa = [
       [subtitle],
       [filterLine],
-      ['כולל נסיעות פנים-אזוריות', filters.includeSelfLoops ? 'כן' : 'לא'],
+      ['Include self-loops', filters.includeSelfLoops ? 'Yes' : 'No'],
       ...zoneRows(selectedZoneNames),
       [],
-      ['מזהה אזור', 'שם אזור', 'נסיעות', 'אחוז (%)'],
+      ['Zone ID', 'Zone name', 'Trips', 'Share (%)'],
       ...dataRows,
-      ['', 'סה"כ', roundedTotal, 100],
+      ['', 'Total', roundedTotal, 100],
     ]
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     XLSX.utils.book_append_sheet(wb, ws, tabLabel.slice(0, 31))
   }
 
-  const filename = `pie_chart_${DAY_LABEL[filters.day] ?? filters.day}_${filters.hourMin}-${filters.hourMax}.xlsx`
+  const filename = `pie_chart_${filters.day}_${filters.hourMin}-${filters.hourMax}.xlsx`
   XLSX.writeFile(wb, filename)
 }

@@ -39,11 +39,8 @@ export default function Sidebar() {
         <div className="pb-3 border-b border-gray-700">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-2 h-2 flex-shrink-0 rounded-full bg-sky-400" />
-            <h1 className="text-sm font-semibold text-gray-200 tracking-wide">Cellular Survey Data Analyzer</h1>
+            <h1 className="text-sm font-semibold text-gray-200 tracking-wide">OD Flow Viewer</h1>
           </div>
-          <p className="text-xs text-gray-500 leading-snug pl-4">
-            Information on national passenger movements from mobile phones, 2018–19, published by Israeli Ministry of Transport
-          </p>
         </div>
 
         <LevelSelector />
